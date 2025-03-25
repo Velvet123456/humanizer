@@ -143,7 +143,7 @@ def update_xp(user_id, amount):
     db.reference(f"users/{user_id}/xp").set(new_xp)
     return None
 
-token = "MTM1NDA4NzkwMzEyNjQ4NzEyMA.GpRIas.O3leLXtBzmtcK6501F9-2sX39s-TnQjNkoAMGA"
+token = os.getenv("DISCORD_TOKEN")
 
 
 class SelfBot(commands.Bot):
