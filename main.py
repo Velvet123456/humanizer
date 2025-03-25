@@ -145,9 +145,6 @@ def update_xp(user_id, amount):
     db.reference(f"users/{user_id}/xp").set(new_xp)
     return None
 
-token = os.getenv("DISCORD_TOKEN")
-print(token)
-
 class SelfBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -404,4 +401,4 @@ class SelfBot(commands.Bot):
 
 
 client = SelfBot()
-client.run(token)
+client.run(os.getenv("DISCORD_TOKEN"))
