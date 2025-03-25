@@ -5,8 +5,11 @@ import firebase_admin
 from firebase_admin import credentials, db
 import random
 import os
+from dotenv import load_dotenv
 import time
 
+
+load_dotenv()
 
 BLACKLISTED_IDS = ["1317890350471319633","909446748613779486"]
 
@@ -145,6 +148,11 @@ def update_xp(user_id, amount):
     db.reference(f"users/{user_id}/xp").set(new_xp)
     return None
 
+TOKEN = os.getenv("DISCORD_TOKEN")
+if not TOKEN:
+    print("Error: DISCORD_TOKEN is not set in .env file")
+    exit(1)
+
 class SelfBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -156,6 +164,7 @@ class SelfBot(commands.Bot):
             intents=intents  # THIS WAS MISSING
         )
 
+    
     async def on_ready(self):
         print(f"Logged in as {self.user}")
 
@@ -401,4 +410,4 @@ class SelfBot(commands.Bot):
 
 
 client = SelfBot()
-client.run(os.getenv("DISCORD_TOKEN"))
+client.run(TOKEN)
