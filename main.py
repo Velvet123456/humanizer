@@ -59,8 +59,8 @@ def get_balance(user_id):
     ref = db.reference(f"users/{user_id}/balance")
     balance = ref.get()
     if balance is None:
-        ref.set(1000)
-        return 1000
+        ref.set(0)
+        return 0
     return balance
 
 def update_balance(user_id, amount):
