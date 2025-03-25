@@ -85,19 +85,54 @@ def redeem_code(user_id, code):
         return reward
     return None
 
+import random
+import time
+from firebase_admin import db
+
 def rob_user(robber_id, victim_id):
-    victim_balance = get_balance(victim_id)
-    robber_balance = get_balance(robber_id)
+    # Fetching user data from the database
+    victim_ref = db.reference(f"users/{victim_id}")
+    robber_ref = db.reference(f"users/{robber_id}")
+    
+    victim_data = victim_ref.get()
+    robber_data = robber_ref.get()
+    
+    if not victim_data or not robber_data:
+        return "❌ User data not found in the database."
+    
+    victim_balance = victim_data.get("balance", 0)
+    robber_balance = robber_data.get("balance", 0)
+    last_rob_time = robber_data.get("last_rob_time", 0)
+    
+    # Check if the robber can rob again (10 minutes cooldown)
+    current_time = int(time.time())
+    if current_time - last_rob_time < 600:  # 600 seconds = 10 minutes
+        remaining_time = 600 - (current_time - last_rob_time)
+        return f"❌ You can rob again in {remaining_time // 60} minutes and {remaining_time % 60} seconds."
+    
+    # Update the rob timestamp in the database
+    robber_ref.update({"last_rob_time": current_time})
+    
     if victim_balance < 100:
         return "❌ This user is too poor to rob!"
-    if random.randint(1, 100) <= 36:
-        stolen_amount = int(victim_balance * 0.28)
+    
+    # 28% chance to succeed
+    if random.randint(1, 100) <= 28:
+        stolen_amount = int(victim_balance * 0.28)  # 28% of victim's balance
         update_balance(robber_id, stolen_amount)
         update_balance(victim_id, -stolen_amount)
         return f"💰 You successfully robbed {stolen_amount} coins from <@{victim_id}>!"
-    lost_amount = int(robber_balance * 0.18)
+    
+    # 20% failure penalty
+    lost_amount = int(robber_balance * 0.20)  # 20% of robber's balance as penalty
     update_balance(robber_id, -lost_amount)
     return f"❌ You failed to rob <@{victim_id}> and lost {lost_amount} coins!"
+    
+# Utility function to update balance (this assumes the function is implemented elsewhere)
+def update_balance(user_id, amount):
+    user_ref = db.reference(f"users/{user_id}")
+    user_ref.update({"balance": user_ref.get().get("balance", 0) + amount})
+
 
 def pay_user(sender_id, receiver_id, amount):
     sender_balance = get_balance(sender_id)
