@@ -148,7 +148,14 @@ token = "MTM1NDA4NzkwMzEyNjQ4NzEyMA.GpRIas.O3leLXtBzmtcK6501F9-2sX39s-TnQjNkoAMG
 
 class SelfBot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix="!", self_bot=True)
+        intents = discord.Intents.default()
+        intents.message_content = True  # Required to read messages
+        intents.members = True  # Needed for user mentions
+        super().__init__(
+            command_prefix="!",
+            self_bot=True,
+            intents=intents  # THIS WAS MISSING
+        )
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
