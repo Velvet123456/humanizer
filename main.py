@@ -229,7 +229,6 @@ class SelfBot(discord.Client):
                 "`!rob @user` - Steal coins from others.\n"
                 "`!pay @user <amount>` - Transfer coins to someone.\n"
                 "`!leaderboard` - Check The Server Leaderboard.\n"
-                "`!globalleaderboard` - Check the Global Leaderboard."
             )
 
         if message.content.startswith("!profile"):
@@ -319,23 +318,6 @@ class SelfBot(discord.Client):
                 return
             await message.reply("**🏆 Server Leaderboard**\n" + 
                 "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
-
-        if message.content.startswith(("!globalleaderboard", "!glb")):
-                if message.guild is None:
-                    await message.reply("❌ This command can only be used in a server!")
-                    return
-
-                top_players = get_global_leaderboard()
-                if not top_players:
-                    await message.reply("❌ | No users found globally!")
-                    return
-
-                leaderboard_msg = "**🌍 Global Leaderboard**\n"
-                for idx, (user_id, data) in enumerate(top_players, 1):
-                    user = await self.fetch_user(int(user_id))
-                    leaderboard_msg += f"{idx}. {user.name} - {data.get('balance', 0)} coins\n"
-
-                await message.reply(leaderboard_msg)
 
         if message.content.startswith("!rob"):
             if message.guild is None:
