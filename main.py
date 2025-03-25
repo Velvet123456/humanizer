@@ -85,46 +85,19 @@ def redeem_code(user_id, code):
         return reward
     return None
 
-@bot.command()
-async def rob(ctx):
-    user_id = str(ctx.author.id)
-    ref = db.reference(f"users/{user_id}")
-    user_data = ref.get()
-
-    if not user_data:
-        await ctx.send("You don't have an account yet. Please register first.")
-        return
-
-    # Get the last rob timestamp from the database
-    last_rob_time = user_data.get("last_rob_time", 0)
-
-    # Check if 10 minutes have passed since the last rob attempt
-    current_time = int(time.time())
-    if current_time - last_rob_time < 600:  # 600 seconds = 10 minutes
-        await ctx.send("You can rob again in 10 minutes.")
-        return
-
-    # Update the rob timer in the database
-    ref.update({"last_rob_time": current_time})
-
-    # Simulating the rob action with a 30% chance of success
-    success_chance = random.randint(1, 100)
-    if success_chance <= 30:  # 30% chance of robbing success
-        # Calculate the amount to rob
-        rob_amount = random.randint(50, 500)
-
-        # Ensure user has enough balance to rob
-        if user_data.get("balance", 0) < rob_amount:
-            await ctx.send(f"You don't have enough balance to rob {rob_amount}!")
-            return
-
-        # Deduct the robbed amount and update the user's balance
-        new_balance = user_data["balance"] - rob_amount
-        ref.update({"balance": new_balance})
-
-        await ctx.send(f"Success! You robbed {rob_amount} from your balance.")
-    else:
-        await ctx.send("Robbery failed! You got caught.")
+def rob_user(robber_id, victim_id):
+    victim_balance = get_balance(victim_id)
+    robber_balance = get_balance(robber_id)
+    if victim_balance < 100:
+        return "❌ This user is too poor to rob!"
+    if random.randint(1, 100) <= 36:
+        stolen_amount = int(victim_balance * 0.28)
+        update_balance(robber_id, stolen_amount)
+        update_balance(victim_id, -stolen_amount)
+        return f"💰 You successfully robbed {stolen_amount} coins from <@{victim_id}>!"
+    lost_amount = int(robber_balance * 0.18)
+    update_balance(robber_id, -lost_amount)
+    return f"❌ You failed to rob <@{victim_id}> and lost {lost_amount} coins!"
 
 def pay_user(sender_id, receiver_id, amount):
     sender_balance = get_balance(sender_id)
