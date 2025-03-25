@@ -85,10 +85,6 @@ def redeem_code(user_id, code):
         return reward
     return None
 
-import random
-import time
-from firebase_admin import db
-
 def rob_user(robber_id, victim_id):
     # Fetching user data from the database
     victim_ref = db.reference(f"users/{victim_id}")
@@ -341,6 +337,17 @@ class SelfBot(discord.Client):
 
                 await message.reply(leaderboard_msg)
 
+        if message.content.startswith("!rob"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.") 
+                return
+            if not message.mentions or str(message.mentions[0].id) == user_id:
+                await message.reply(f"use `!rob @user`")
+                return
+            await message.reply(rob_user(user_id, str(message.mentions[0].id)))
         if message.content.startswith("!redeem"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -358,17 +365,6 @@ class SelfBot(discord.Client):
             else:
                 await message.reply(f"invalid or already used code!")
 
-        if message.content.startswith("!rob"):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.") 
-                return
-            if not message.mentions or str(message.mentions[0].id) == user_id:
-                await message.reply(f"use `!rob @user`")
-                return
-            await message.reply(rob_user(user_id, str(message.mentions[0].id)))
 
         if message.content.startswith("!pay"):
             if message.guild is None:
