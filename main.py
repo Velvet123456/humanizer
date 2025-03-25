@@ -120,16 +120,21 @@ def get_server_leaderboard(guild):
 def get_global_leaderboard():
     ref = db.reference("users")
     users = ref.get()
+
+    # If no users exist in the database
     if not users:
         return []
 
+    # Filter out blacklisted users
+    filtered_users = {uid: data for uid, data in users.items() if uid not in BLACKLISTED_IDS}
 
-    filtered_users = {uid: data for uid, data in users.items() 
-                     if uid not in BLACKLISTED_IDS}
+    # Sorting the users by balance in descending order, handling missing or incorrect balance data
+    leaderboard = sorted(
+        filtered_users.items(), 
+        key=lambda x: x[1].get("balance", 0),  # Default to 0 if balance is missing
+        reverse=True
+    )[:5]  # Get top 5 users
 
-    leaderboard = sorted(filtered_users.items(), 
-                        key=lambda x: x[1].get("balance", 0), 
-                        reverse=True)[:5]
     return leaderboard
 
 def get_xp(user_id):
