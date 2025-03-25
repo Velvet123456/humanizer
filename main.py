@@ -1,4 +1,5 @@
 import discord
+from discord import enums  # This is key for selfbot features
 from discord.ext import commands
 import firebase_admin
 from firebase_admin import credentials, db
