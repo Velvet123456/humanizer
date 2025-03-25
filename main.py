@@ -146,7 +146,7 @@ def update_xp(user_id, amount):
     return None
 
 token = os.getenv("DISCORD_TOKEN")
-
+print(token)
 
 class SelfBot(commands.Bot):
     def __init__(self):
