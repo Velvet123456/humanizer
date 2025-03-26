@@ -291,21 +291,23 @@ class SelfBot(discord.Client):
     current_loan = user_data.get("loan", 0)
     loan_paid = user_data.get("loan_paid", 0)
 
-    if loan_deadline > 0 and time.time() > loan_deadline and current_loan - loan_paid > 0:
-        await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
-        return
-            last_work_ref = db.reference(f"users/{user_id}/last_work")
-            last_work = last_work_ref.get() or 0
-            now = int(time.time())
+if loan_deadline > 0 and time.time() > loan_deadline and current_loan - loan_paid > 0:
+    await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
+    return
 
-            cooldown = 600
-            remaining = cooldown - (now - last_work)
+last_work_ref = db.reference(f"users/{user_id}/last_work")
+last_work = last_work_ref.get() or 0
+now = int(time.time())
 
-            if remaining > 0:
-                minutes = remaining // 60
-                seconds = remaining % 60
-                await message.reply(f"Please wait {minutes}m {seconds}s before working again!")
-                return
+cooldown = 600
+remaining = cooldown - (now - last_work)
+
+if remaining > 0:
+    minutes = remaining // 60
+    seconds = remaining % 60
+    await message.reply(f"Please wait {minutes}m {seconds}s before working again!")
+    return
+
 
             jobs = ["skid","awp.gg developer","grass toucher","farmer","stripper","discord e-girls server manager","wave developer","footballer","sigma","dancer","robber","byfron developer"]
             job = random.choice(jobs)
