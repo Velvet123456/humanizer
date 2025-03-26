@@ -161,11 +161,11 @@ def update_xp(user_id, amount):
     db.reference(f"users/{user_id}/xp").set(new_xp)
     return None
 
+# --- Self-Bot Class ---
 class SelfBot(discord.Client):
     def __init__(self):
         super().__init__(self_bot=True)
         self.command_prefix = "!"
-
         
     async def on_ready(self):
         print(f"Logged in as {self.user}")
@@ -453,13 +453,14 @@ class SelfBot(discord.Client):
             else:
                 update_balance(user_id, -bet)
                 await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
-
+        
+        # !leaderboard command
         if message.content.startswith(("!leaderboard", "!lb")):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
             if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.") 
+                await message.reply("❌ | You are **banned** from using this bot.")
                 return
             leaderboard = get_server_leaderboard(message.guild)
             if not leaderboard:
@@ -501,7 +502,7 @@ class SelfBot(discord.Client):
                 await message.reply(f"😢 | You lost {bet} coins! New balance is {get_balance(user_id)} coins.")
         
         # End of on_message processing
-        await self.process_commands(message)
+        # Removed: await self.process_commands(message)
 
 # --- Main Execution ---
 if __name__ == "__main__":
