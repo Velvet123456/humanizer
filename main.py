@@ -211,6 +211,7 @@ class SelfBot(discord.Client):
                 return
             target = message.mentions[0] if message.mentions else message.author
             target_id = str(target.id)
+            xp_message = update_xp(user_id, 1)
             balance = get_balance(target_id)
             level = get_level(target_id)
             xp = get_xp(target_id)
@@ -237,7 +238,7 @@ class SelfBot(discord.Client):
             current_loan = user_data.get("loan", 0)
             loan_paid = user_data.get("loan_paid", 0)
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-                await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
+                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
                 return
             last_work_ref = db.reference(f"users/{user_id}/last_work")
             last_work = last_work_ref.get() or 0
@@ -258,7 +259,7 @@ class SelfBot(discord.Client):
             job = random.choice(jobs)
             earnings = random.randint(50, 200)
             update_balance(user_id, earnings)
-            xp_message = update_xp(user_id, 3)
+            xp_message = update_xp(user_id, 6)
             response = f"You worked as a {job} and earned {earnings} coins! New balance: {get_balance(user_id)} coins."
             if xp_message:
                 response += "\n" + xp_message
@@ -277,7 +278,7 @@ class SelfBot(discord.Client):
             else:
                 update_balance(user_id, 500)
                 set_last_claim(user_id, int(time.time()))
-                xp_message = update_xp(user_id, 5)
+                xp_message = update_xp(user_id, 30)
                 await message.reply(f"👴 | Claimed your daily 500 coins! {xp_message if xp_message else ''}")
         
         # !loan command
@@ -304,6 +305,7 @@ class SelfBot(discord.Client):
                 return
             interest = int(amount * 0.10)
             total_repay = amount + interest
+            xp_message = update_xp(user_id, 1)
             deadline = int(time.time()) + 86400  # 24 hours from now
             user_ref.update({
                 "loan": total_repay,
@@ -311,7 +313,7 @@ class SelfBot(discord.Client):
                 "loan_paid": 0
             })
             update_balance(user_id, amount)
-            await message.reply(f"✅ You have borrowed {amount} coins. You need to repay {total_repay} coins within 24 hours or you'll be blocked from `!work` and `!gamble`.")
+            await message.reply(f"✅ You have borrowed {amount} coins. You need to repay {total_repay} coins within 24 hours or you'll be blocked from some commands.")
         
         # !payloan command
         if message.content.startswith("!payloan"):
@@ -342,6 +344,7 @@ class SelfBot(discord.Client):
                 amount = current_loan - loan_paid
             update_balance(user_id, -amount)
             loan_paid += amount
+            xp_message = update_xp(user_id, 1)
             remaining_loan = current_loan - loan_paid
             user_ref.update({"loan_paid": loan_paid})
             time_left = max(0, loan_deadline - int(time.time()))
@@ -355,7 +358,7 @@ class SelfBot(discord.Client):
                 })
                 await message.reply("✅ You have fully repaid your loan! You can now use `!work` and `!gamble` again.")
             else:
-                await message.reply(f"✅ Paid {loan_paid}/{current_loan}$, the deadline is in {hours}h {minutes}m.")
+                await message.reply(f"✅ Paid {loan_paid}/{current_loan}$, Deadline: {hours}h {minutes}m.")
         
         # !rob command
         if message.content.startswith("!rob"):
@@ -369,9 +372,10 @@ class SelfBot(discord.Client):
             user_data = user_ref.get() or {}
             loan_deadline = user_data.get("loan_deadline", 0)
             current_loan = user_data.get("loan", 0)
+            xp_message = update_xp(user_id, 6)
             loan_paid = user_data.get("loan_paid", 0)
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-                await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
+                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
                 return
             if not message.mentions or str(message.mentions[0].id) == user_id:
                 await message.reply("Use `!rob @user`")
@@ -409,6 +413,7 @@ class SelfBot(discord.Client):
                 await message.reply("Use `!pay @user <amount>`")
                 return
             result = pay_user(user_id, str(message.mentions[0].id), int(parts[2]))
+            xp_message = update_xp(user_id, 6)
             await message.reply(result)
         
         # !coinflip command
@@ -425,7 +430,7 @@ class SelfBot(discord.Client):
             current_loan = user_data.get("loan", 0)
             loan_paid = user_data.get("loan_paid", 0)
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-                await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
+                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
                 return
             if len(parts) < 3:
                 await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
@@ -448,7 +453,7 @@ class SelfBot(discord.Client):
             result = random.choice(["heads", "tails"])
             if result == choice:
                 update_balance(user_id, bet)
-                xp_message = update_xp(user_id, 3)
+                xp_message = update_xp(user_id, 5)
                 await message.reply(f"✅ The coin landed on **{result}**! You won {bet} coins! New balance: {get_balance(user_id)} coins.")
             else:
                 update_balance(user_id, -bet)
@@ -483,7 +488,7 @@ class SelfBot(discord.Client):
             current_loan = user_data.get("loan", 0)
             loan_paid = user_data.get("loan_paid", 0)
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-                await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
+                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
                 return
             if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
                 await message.reply("Use `!gamble <amount/all>`")
@@ -493,13 +498,14 @@ class SelfBot(discord.Client):
             if bet > balance or bet <= 0:
                 await message.reply("Invalid Bet Amount!")
                 return
-            if random.choice([True, False]):
-                update_balance(user_id, bet)
-                xp_message = update_xp(user_id, 3)
-                await message.reply(f"😍 | You won {bet} coins! New balance is {get_balance(user_id)} coins.")
-            else:
-                update_balance(user_id, -bet)
-                await message.reply(f"😢 | You lost {bet} coins! New balance is {get_balance(user_id)} coins.")
+    if random.random() <= 0.40:
+        update_balance(user_id, bet)
+        xp_message = update_xp(user_id, 4)
+        await message.reply(f"😍 | You won {bet} coins! New balance is {get_balance(user_id)} coins.")
+    else:
+        xp_message = update_xp(user_id, 4)
+        update_balance(user_id, -bet)
+        await message.reply(f"😢 | You lost {bet} coins! New balance is {get_balance(user_id)} coins.")
         
         # End of on_message processing
         # Removed: await self.process_commands(message)
