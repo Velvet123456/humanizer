@@ -511,76 +511,77 @@ if message.content.startswith("!payloan"):
     current_loan = user_data.get("loan", 0)
     loan_paid = user_data.get("loan_paid", 0)
 
-    if loan_deadline > 0 and time.time() > loan_deadline and current_loan - loan_paid > 0:
+    if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
         await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
         return
-            if len(parts) < 3:
-                await message.reply(f"Use `!coinflip <amount/all> <heads/tails>`")
-                return
 
-            choice = parts[2].lower()
-            if choice not in ["heads", "tails"]:
-                await message.reply(f"Use `!coinflip <amount/all> <heads/tails>`")
-                return
+    if len(parts) < 3:
+        await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
+        return
 
-            balance = get_balance(user_id)
+    choice = parts[2].lower()
+    if choice not in ["heads", "tails"]:
+        await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
+        return
 
-            if parts[1].lower() == "all":
-                bet = balance
-            elif parts[1].isdigit():
-                bet = int(parts[1])
-            else:
-                await message.reply(f"Invalid bet amount!")
-                return
+    balance = get_balance(user_id)
+    if parts[1].lower() == "all":
+        bet = balance
+    elif parts[1].isdigit():
+        bet = int(parts[1])
+    else:
+        await message.reply("Invalid bet amount!")
+        return
 
-            if bet > balance or bet <= 0:
-                await message.reply(f"You don't have enough coins!")
-                return
+    if bet > balance or bet <= 0:
+        await message.reply("You don't have enough coins!")
+        return
 
-            result = random.choice(["heads", "tails"])
-            if result == choice:
-                update_balance(user_id, bet)
-                xp_message = update_xp(user_id, 3)
-                await message.reply(f"✅ The coin landed on **{result}**! You won {bet} coins! New balance: {get_balance(user_id)} coins.")
-            else:
-                update_balance(user_id, -bet)
-                await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
+    result = random.choice(["heads", "tails"])
+    if result == choice:
+        update_balance(user_id, bet)
+        xp_message = update_xp(user_id, 3)
+        await message.reply(f"✅ The coin landed on **{result}**! You won {bet} coins! New balance: {get_balance(user_id)} coins.")
+    else:
+        update_balance(user_id, -bet)
+        await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
 
-        if message.content.startswith("!gamble"):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.") 
-                return
+if message.content.startswith("!gamble"):
+    if message.guild is None:
+        await message.reply("❌ This command can only be used in a server!")
+        return
+    if is_banned(message.author.id):
+        await message.reply("❌ | You are **banned** from using this bot.")
+        return
 
-                user_ref = db.reference(f"users/{user_id}")
+    user_ref = db.reference(f"users/{user_id}")
     user_data = user_ref.get() or {}
     loan_deadline = user_data.get("loan_deadline", 0)
     current_loan = user_data.get("loan", 0)
     loan_paid = user_data.get("loan_paid", 0)
 
-    if loan_deadline > 0 and time.time() > loan_deadline and current_loan - loan_paid > 0:
+    if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
         await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
         return
-            if len(parts) < 2 or (not parts[1].isdigit() and parts[1] != "all"):
-                await message.reply(f"Use `!gamble <amount/all>`")
-                return
 
-            balance = get_balance(user_id)
-            bet = balance if parts[1] == "all" else int(parts[1])
+    if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
+        await message.reply("Use `!gamble <amount/all>`")
+        return
 
-            if bet > balance or bet <= 0:
-                await message.reply(f"Invalid Bet Amount!")
-                return
+    balance = get_balance(user_id)
+    bet = balance if parts[1].lower() == "all" else int(parts[1])
 
-            if random.choice([True, False]):
-                update_balance(user_id, bet)
-                xp_message = update_xp(user_id, 3)
-                await message.reply(f"😍 | You won {bet} coins! New balance is {get_balance(user_id)} coins.")
-            else:
-                update_balance(user_id, -bet)
-                await message.reply(f"😢 | You lost {bet} coins! New balance is {get_balance(user_id)} coins.")
+    if bet > balance or bet <= 0:
+        await message.reply("Invalid Bet Amount!")
+        return
+
+    if random.choice([True, False]):
+        update_balance(user_id, bet)
+        xp_message = update_xp(user_id, 3)
+        await message.reply(f"😍 | You won {bet} coins! New balance is {get_balance(user_id)} coins.")
+    else:
+        update_balance(user_id, -bet)
+        await message.reply(f"😢 | You lost {bet} coins! New balance is {get_balance(user_id)} coins.")
 
 
 
