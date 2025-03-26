@@ -177,8 +177,40 @@ class SelfBot(discord.Client):
         
         user_id = str(message.author.id)
         parts = message.content.lower().split()
+
+        if message.content.startswith("!gamble"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            loan_deadline = user_data.get("loan_deadline", 0)
+            current_loan = user_data.get("loan", 0)
+            loan_paid = user_data.get("loan_paid", 0)
+            if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
+                return
+            if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
+                await message.reply("Use !gamble <amount/all>")
+                return
+            balance = get_balance(user_id)
+            bet = balance if parts[1].lower() == "all" else int(parts[1])
+            if bet > balance or bet <= 0:
+                await message.reply("Invalid Bet Amount!")
+                return
+            # 20% chance of winning
+            if random.random() <= 0.20:
+                update_balance(user_id, bet)
+                xp_message = update_xp(user_id, 4)
+                await message.reply(f"😍 | You won {bet} coins! New balance is {get_balance(user_id)} coins.")
+            else:
+                xp_message = update_xp(user_id, 4)
+                update_balance(user_id, -bet)
+                await message.reply(f"😢 | You lost {bet} coins! New balance is {get_balance(user_id)} coins.")
         
-        # !help command
         if message.content.startswith("!help"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
@@ -473,39 +505,7 @@ class SelfBot(discord.Client):
                 return
             await message.reply("**🏆 Server Leaderboard**\n" + 
                 "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
-        
-if message.content.startswith("!gamble"):
-    if message.guild is None:
-        await message.reply("❌ This command can only be used in a server!")
-        return
-    if is_banned(message.author.id):
-        await message.reply("❌ | You are **banned** from using this bot.")
-        return
-    user_ref = db.reference(f"users/{user_id}")
-    user_data = user_ref.get() or {}
-    loan_deadline = user_data.get("loan_deadline", 0)
-    current_loan = user_data.get("loan", 0)
-    loan_paid = user_data.get("loan_paid", 0)
-    if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-        await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
-        return
-    if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
-        await message.reply("Use !gamble <amount/all>")
-        return
-    balance = get_balance(user_id)
-    bet = balance if parts[1].lower() == "all" else int(parts[1])
-    if bet > balance or bet <= 0:
-        await message.reply("Invalid Bet Amount!")
-        return
-    # 20% chance of winning
-    if random.random() <= 0.20:
-        update_balance(user_id, bet)
-        xp_message = update_xp(user_id, 4)
-        await message.reply(f"😍 | You won {bet} coins! New balance is {get_balance(user_id)} coins.")
-    else:
-        xp_message = update_xp(user_id, 4)
-        update_balance(user_id, -bet)
-        await message.reply(f"😢 | You lost {bet} coins! New balance is {get_balance(user_id)} coins.")
+
 
 
         
