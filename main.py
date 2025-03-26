@@ -591,7 +591,7 @@ if message.content.startswith("!gamble"):
 
 
 
-
+    await client.process_commands(message)
 
 if __name__ == "__main__":
     def run_flask():
