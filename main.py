@@ -197,7 +197,7 @@ class SelfBot(discord.Client):
                 "`!payloan <amount>` - Pay back the loan amount taken.\n"
                 "`!redeem <code>` - Redeem a code.\n"
                 "`!rob @user` - Steal coins from others.\n"
-                "`!pay @user <amount>` - Transfer coins to someone.\n"
+                "`!transfer @user <amount>` - Transfer coins to someone.\n"
                 "`!leaderboard` - Check The Server Leaderboard.\n"
             )
         
@@ -242,7 +242,7 @@ class SelfBot(discord.Client):
             last_work_ref = db.reference(f"users/{user_id}/last_work")
             last_work = last_work_ref.get() or 0
             now = int(time.time())
-            cooldown = 600  # 10 minutes cooldown
+            cooldown = 120
             remaining = cooldown - (now - last_work)
             if remaining > 0:
                 minutes = remaining // 60
@@ -365,6 +365,14 @@ class SelfBot(discord.Client):
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            loan_deadline = user_data.get("loan_deadline", 0)
+            current_loan = user_data.get("loan", 0)
+            loan_paid = user_data.get("loan_paid", 0)
+            if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+                await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
+                return
             if not message.mentions or str(message.mentions[0].id) == user_id:
                 await message.reply("Use `!rob @user`")
                 return
@@ -390,7 +398,7 @@ class SelfBot(discord.Client):
                 await message.reply("🔴 | This code is either invalid or has been already used!")
         
         # !pay command
-        if message.content.startswith("!pay"):
+        if message.content.startswith("!transfer"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
                 return
@@ -445,6 +453,20 @@ class SelfBot(discord.Client):
             else:
                 update_balance(user_id, -bet)
                 await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
+
+        if message.content.startswith(("!leaderboard", "!lb")):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.") 
+                return
+            leaderboard = get_server_leaderboard(message.guild)
+            if not leaderboard:
+                await message.reply("❌ | No users found in this server!")
+                return
+            await message.reply("**🏆 Server Leaderboard**\n" + 
+                "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
         
         # !gamble command
         if message.content.startswith("!gamble"):
