@@ -5,11 +5,11 @@ from discord.ext import commands
 import firebase_admin
 from firebase_admin import credentials, db
 import random
-
 import os
 from dotenv import load_dotenv
 import time
 
+# Initialize Flask for uptime pings
 app = Flask(__name__)
 
 load_dotenv()
@@ -19,13 +19,12 @@ if not TOKEN:
     print("Error: DISCORD_TOKEN is not set in .env file")
     exit(1)
 
-
 @app.route('/')
 def home():
     return "Self-bot is running!"
 
-
-BLACKLISTED_IDS = ["1317890350471319633","909446748613779486"]
+# --- Firebase setup ---
+BLACKLISTED_IDS = ["1317890350471319633", "909446748613779486"]
 
 cred = credentials.Certificate("rohackersz-firebase-adminsdk-fbsvc-ef11a7abad.json")
 firebase_admin.initialize_app(cred, {
@@ -39,22 +38,7 @@ def is_banned(user_id: int) -> bool:
     banned_users = ban_ref.get() or {}
     return str(user_id) in banned_users
 
-class CustomBot(commands.Bot):
-    async def invoke(self, ctx):
-        """Override invoke to allow all commands without ban checks."""
-        await super().invoke(ctx)
-
-async def check_permission(interaction: discord.Interaction) -> bool:
-    """Checks if the user has permission to use commands."""
-    if is_banned(interaction.user.id):
-        embed = discord.Embed(
-            title="❌ Access Denied",
-            description="You are banned from using this bot.",
-            color=discord.Color.red()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return False
-
+# --- Utility Functions ---
 def get_balance(user_id):
     ref = db.reference(f"users/{user_id}/balance")
     balance = ref.get()
@@ -65,13 +49,12 @@ def get_balance(user_id):
 
 def update_balance(user_id, amount):
     user_ref = db.reference(f"users/{user_id}")
-    user_data = user_ref.get() 
-    if user_data is None: 
-        user_data = {"balance": 0}
-
-    new_balance = user_data.get("balance", 0) + amount  
-    user_ref.set({"balance": new_balance}) 
-
+    current_data = user_ref.get()
+    if current_data is None or not isinstance(current_data, dict):
+        current_balance = 0
+    else:
+        current_balance = current_data.get("balance", 0)
+    user_ref.update({"balance": current_balance + amount})
 
 def get_last_claim(user_id):
     ref = db.reference(f"users/{user_id}/last_daily")
@@ -84,73 +67,42 @@ def set_last_claim(user_id, timestamp):
 def redeem_code(user_id, code):
     code = code.lower() 
     ref = db.reference("codes")
-
     all_codes = ref.get() or {}
     matched_code = next((c for c in all_codes if c.lower() == code), None)
-
     if matched_code is None:
         return None
-
     reward = db.reference(f"codes/{matched_code}").get()
     if reward and not db.reference(f"redeemed/{matched_code}/{user_id}").get():
         update_balance(user_id, reward)
         db.reference(f"redeemed/{matched_code}/{user_id}").set(True)
         return reward
-    
     return None
 
-
-
 def rob_user(robber_id, victim_id):
-
     victim_ref = db.reference(f"users/{victim_id}")
     robber_ref = db.reference(f"users/{robber_id}")
-    
     victim_data = victim_ref.get()
     robber_data = robber_ref.get()
-    
     if not victim_data or not robber_data:
         return "❌ User never used the bot (Doesn't have any money)"
-    
     victim_balance = victim_data.get("balance", 0)
     robber_balance = robber_data.get("balance", 0)
     last_rob_time = robber_data.get("last_rob_time", 0)
-    
-
     current_time = int(time.time())
     if current_time - last_rob_time < 600:
         remaining_time = 600 - (current_time - last_rob_time)
         return f"❌ You can rob again in {remaining_time // 60} minutes and {remaining_time % 60} seconds."
-    
-
     robber_ref.update({"last_rob_time": current_time})
-    
     if victim_balance < 100:
         return "❌ This user is too poor to rob!"
-    
-
     if random.randint(1, 100) <= 28:
-        stolen_amount = int(victim_balance * 0.28) 
+        stolen_amount = int(victim_balance * 0.28)
         update_balance(robber_id, stolen_amount)
         update_balance(victim_id, -stolen_amount)
         return f"💰 You successfully robbed {stolen_amount} coins from <@{victim_id}>!"
-    
-
     lost_amount = int(robber_balance * 0.20)
     update_balance(robber_id, -lost_amount)
     return f"❌ You failed to rob <@{victim_id}> and lost {lost_amount} coins!"
-    
-
-def update_balance(user_id, amount):
-    user_ref = db.reference(f"users/{user_id}")
-    current_data = user_ref.get()
-    if current_data is None or not isinstance(current_data, dict):
-        current_balance = 0
-    else:
-        current_balance = current_data.get("balance", 0)
-    user_ref.update({"balance": current_balance + amount})
-
-
 
 def pay_user(sender_id, receiver_id, amount):
     sender_balance = get_balance(sender_id)
@@ -164,26 +116,21 @@ def get_server_leaderboard(guild):
     leaderboard = sorted(
         [(m.name, get_balance(str(m.id))) for m in guild.members 
          if not m.bot and str(m.id) not in BLACKLISTED_IDS], 
-        key=lambda x: x[1], reverse=True)[:5]
+        key=lambda x: x[1], reverse=True
+    )[:5]
     return leaderboard
 
 def get_global_leaderboard():
     ref = db.reference("users")
     users = ref.get()
-
-    
     if not users:
         return []
-
-    
     filtered_users = {uid: data for uid, data in users.items() if uid not in BLACKLISTED_IDS}
-
     leaderboard = sorted(
         filtered_users.items(), 
         key=lambda x: x[1].get("balance", 0), 
         reverse=True
-    )[:5] 
-
+    )[:5]
     return leaderboard
 
 def get_xp(user_id):
@@ -216,28 +163,30 @@ def update_xp(user_id, amount):
     db.reference(f"users/{user_id}/xp").set(new_xp)
     return None
 
+# --- Self-Bot Class ---
 class SelfBot(discord.Client):
     def __init__(self):
         super().__init__(self_bot=True)
         self.command_prefix = "!"
-
+        
     async def on_ready(self):
         print(f"Logged in as {self.user}")
-
+    
     async def on_message(self, message):
+        # Ignore messages from bots (including yourself)
         if message.author.bot:
             return
 
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
+        # !help command
         if message.content.startswith("!help"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
                 return
-
             if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.") 
+                await message.reply("❌ | You are **banned** from using this bot.")
                 return
             await message.reply(
                 "**Commands:**\n"
@@ -247,26 +196,26 @@ class SelfBot(discord.Client):
                 "`!gamble <amount/all>` - Gamble coins.\n"
                 "`!coinflip <amount> <heads/tails>` - Coinflip.\n"
                 "`!loan <amount>` - Take loan from the bank.\n"
+                "`!payloan <amount>` - Pay back the loan amount taken.\n"
                 "`!redeem <code>` - Redeem a code.\n"
                 "`!rob @user` - Steal coins from others.\n"
                 "`!pay @user <amount>` - Transfer coins to someone.\n"
-                "`!payloan <amount>` - Pay back the loan amount taken.\n"
                 "`!leaderboard` - Check The Server Leaderboard.\n"
             )
 
+        # !profile command
         if message.content.startswith("!profile"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
-
             if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.") 
+                await message.reply("❌ | You are **banned** from using this bot.")
                 return
             target = message.mentions[0] if message.mentions else message.author
-            user_id = str(target.id)
-            balance = get_balance(user_id)
-            level = get_level(user_id)
-            xp = get_xp(user_id)
+            target_id = str(target.id)
+            balance = get_balance(target_id)
+            level = get_level(target_id)
+            xp = get_xp(target_id)
             xp_needed = 100 + (level - 1) * 150
             profile_msg = (
                 f"{target.name}'s Profile:\n\n"
@@ -276,175 +225,175 @@ class SelfBot(discord.Client):
             )
             await message.reply(profile_msg)
 
+        # !work command
+        if message.content.startswith("!work"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
 
-    if message.content.startswith("!work"):
-        if message.guild is None:
-            await message.reply("❌ This command can only be used in a server!")
-            return
-        if is_banned(message.author.id):
-            await message.reply("❌ | You are **banned** from using this bot.")
-            return
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            loan_deadline = user_data.get("loan_deadline", 0)
+            current_loan = user_data.get("loan", 0)
+            loan_paid = user_data.get("loan_paid", 0)
 
-        # Retrieve user data from the database
-        user_ref = db.reference(f"users/{user_id}")
-        user_data = user_ref.get() or {}
-        loan_deadline = user_data.get("loan_deadline", 0)
-        current_loan = user_data.get("loan", 0)
-        loan_paid = user_data.get("loan_paid", 0)
+            if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+                await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
+                return
 
-        # Check if the user failed to repay their loan on time
-        if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-            await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
-            return
+            last_work_ref = db.reference(f"users/{user_id}/last_work")
+            last_work = last_work_ref.get() or 0
+            now = int(time.time())
+            cooldown = 600  # 10 minutes cooldown
+            remaining = cooldown - (now - last_work)
+            if remaining > 0:
+                minutes = remaining // 60
+                seconds = remaining % 60
+                await message.reply(f"Please wait {minutes}m {seconds}s before working again!")
+                return
 
-        # Check work cooldown
-        last_work_ref = db.reference(f"users/{user_id}/last_work")
-        last_work = last_work_ref.get() or 0
-        now = int(time.time())
-        cooldown = 600  # 10 minutes cooldown
-        remaining = cooldown - (now - last_work)
-        if remaining > 0:
-            minutes = remaining // 60
-            seconds = remaining % 60
-            await message.reply(f"Please wait {minutes}m {seconds}s before working again!")
-            return
+            last_work_ref.set(now)
+            jobs = [
+                "skid", "awp.gg developer", "grass toucher", "farmer", "stripper",
+                "discord e-girls server manager", "wave developer", "footballer", "sigma",
+                "dancer", "robber", "byfron developer"
+            ]
+            job = random.choice(jobs)
+            earnings = random.randint(50, 200)
+            update_balance(user_id, earnings)
+            xp_message = update_xp(user_id, 3)
+            response = f"You worked as a {job} and earned {earnings} coins! New balance: {get_balance(user_id)} coins."
+            if xp_message:
+                response += "\n" + xp_message
+            await message.reply(response)
 
-        # Update last work timestamp
-        last_work_ref.set(now)
-
-        # Select a job and determine earnings
-        jobs = [
-            "skid", "awp.gg developer", "grass toucher", "farmer", "stripper",
-            "discord e-girls server manager", "wave developer", "footballer", "sigma",
-            "dancer", "robber", "byfron developer"
-        ]
-        job = random.choice(jobs)
-        earnings = random.randint(50, 200)
-
-        # Update user's balance and XP
-        update_balance(user_id, earnings)
-        xp_message = update_xp(user_id, 3)
-        
-        response = f"You worked as a {job} and earned {earnings} coins! New balance: {get_balance(user_id)} coins."
-        if xp_message:
-            response += "\n" + xp_message
-
-        await message.reply(response)
-
-
-
-if message.content.startswith("!loan"):
-    if message.guild is None:
-        await message.reply("❌ This command can only be used in a server!")
-        return
-
-    if is_banned(message.author.id):
-        await message.reply("❌ | You are **banned** from using this bot.") 
-        return
-
-    args = message.content.split()
-    if len(args) < 2 or not args[1].isdigit():
-        await message.reply("❌ Usage: `!loan <amount>`")
-        return
-
-    amount = int(args[1])
-    if amount <= 0 or amount > 2000:
-        await message.reply("❌ You can only take a loan between 1 and 2000 coins!")
-        return
-
-    user_ref = db.reference(f"users/{user_id}")
-    user_data = user_ref.get() or {}
-    current_loan = user_data.get("loan", 0)
-
-    if current_loan > 0:
-        await message.reply(f"❌ You already have an active loan of {current_loan} coins! Repay it first.")
-        return
-
-    interest = int(amount * 0.10)
-    total_repay = amount + interest
-    deadline = int(time.time()) + 86400  # 24 hours from now
-
-    user_ref.update({
-        "loan": total_repay,
-        "loan_deadline": deadline,
-        "loan_paid": 0
-    })
-
-    update_balance(user_id, amount)
-
-    await message.reply(f"✅ You have borrowed {amount} coins. You need to repay **{total_repay}** coins within **24 hours** or you will be blocked from `!work` and `!gamble`.")
-
-if message.content.startswith("!payloan"):
-    if message.guild is None:
-        await message.reply("❌ This command can only be used in a server!")
-        return
-
-    if is_banned(message.author.id):
-        await message.reply("❌ | You are **banned** from using this bot.") 
-        return
-
-    args = message.content.split()
-    if len(args) < 2 or not args[1].isdigit():
-        await message.reply("❌ Usage: `!payloan <amount>`")
-        return
-
-    amount = int(args[1])
-    user_ref = db.reference(f"users/{user_id}")
-    user_data = user_ref.get() or {}
-    current_loan = user_data.get("loan", 0)
-    loan_paid = user_data.get("loan_paid", 0)
-    loan_deadline = user_data.get("loan_deadline", 0)
-
-    if current_loan == 0:
-        await message.reply("✅ You have no active loans to repay!")
-        return
-
-    balance = get_balance(user_id)
-    if amount > balance:
-        await message.reply(f"❌ You only have **{balance}** coins!")
-        return
-
-    if amount > current_loan - loan_paid:
-        amount = current_loan - loan_paid
-
-    update_balance(user_id, -amount)
-    loan_paid += amount
-    remaining_loan = current_loan - loan_paid
-
-    user_ref.update({
-        "loan_paid": loan_paid
-    })
-
-    # Calculate time left
-    time_left = max(0, loan_deadline - int(time.time()))
-    hours = time_left // 3600
-    minutes = (time_left % 3600) // 60
-
-    if remaining_loan == 0:
-        user_ref.update({
-            "loan": 0,
-            "loan_deadline": 0,
-            "loan_paid": 0
-        })
-        await message.reply("✅ You have fully repaid your loan! You can now use `!work` and `!gamble` again.")
-    else:
-        await message.reply(f"✅ Paid {loan_paid}/{current_loan}$, the deadline is in {hours}h {minutes}m.")
-
-
+        # !daily command
         if message.content.startswith("!daily"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
             if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.") 
+                await message.reply("❌ | You are **banned** from using this bot.")
                 return
             if int(time.time()) - get_last_claim(user_id) < 86400:
-                await message.reply(f"already claimed today!")
+                await message.reply("Already claimed today!")
             else:
                 update_balance(user_id, 500)
                 set_last_claim(user_id, int(time.time()))
                 xp_message = update_xp(user_id, 5)
-                await message.reply(f"👴 | Claimed your daily **500** coins!")
+                await message.reply(f"👴 | Claimed your daily 500 coins! {xp_message if xp_message else ''}")
+
+        # !loan command
+        if message.content.startswith("!loan"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            args = message.content.split()
+            if len(args) < 2 or not args[1].isdigit():
+                await message.reply("❌ Usage: `!loan <amount>`")
+                return
+            amount = int(args[1])
+            if amount <= 0 or amount > 2000:
+                await message.reply("❌ You can only take a loan between 1 and 2000 coins!")
+                return
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            current_loan = user_data.get("loan", 0)
+            if current_loan > 0:
+                await message.reply(f"❌ You already have an active loan of {current_loan} coins! Repay it first.")
+                return
+            interest = int(amount * 0.10)
+            total_repay = amount + interest
+            deadline = int(time.time()) + 86400  # 24 hours from now
+            user_ref.update({
+                "loan": total_repay,
+                "loan_deadline": deadline,
+                "loan_paid": 0
+            })
+            update_balance(user_id, amount)
+            await message.reply(f"✅ You have borrowed {amount} coins. You need to repay {total_repay} coins within 24 hours or you'll be blocked from `!work` and `!gamble`.")
+
+        # !payloan command
+        if message.content.startswith("!payloan"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            args = message.content.split()
+            if len(args) < 2 or not args[1].isdigit():
+                await message.reply("❌ Usage: `!payloan <amount>`")
+                return
+            amount = int(args[1])
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            current_loan = user_data.get("loan", 0)
+            loan_paid = user_data.get("loan_paid", 0)
+            loan_deadline = user_data.get("loan_deadline", 0)
+            if current_loan == 0:
+                await message.reply("✅ You have no active loans to repay!")
+                return
+            balance = get_balance(user_id)
+            if amount > balance:
+                await message.reply(f"❌ You only have {balance} coins!")
+                return
+            if amount > current_loan - loan_paid:
+                amount = current_loan - loan_paid
+            update_balance(user_id, -amount)
+            loan_paid += amount
+            remaining_loan = current_loan - loan_paid
+            user_ref.update({"loan_paid": loan_paid})
+            time_left = max(0, loan_deadline - int(time.time()))
+            hours = time_left // 3600
+            minutes = (time_left % 3600) // 60
+            if remaining_loan == 0:
+                user_ref.update({
+                    "loan": 0,
+                    "loan_deadline": 0,
+                    "loan_paid": 0
+                })
+                await message.reply("✅ You have fully repaid your loan! You can now use `!work` and `!gamble` again.")
+            else:
+                await message.reply(f"✅ Paid {loan_paid}/{current_loan}$, the deadline is in {hours}h {minutes}m.")
+
+        # !rob command
+        if message.content.startswith("!rob"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            if not message.mentions or str(message.mentions[0].id) == user_id:
+                await message.reply("Use `!rob @user`")
+                return
+            result = rob_user(user_id, str(message.mentions[0].id))
+            await message.reply(result)
+
+        # !redeem command
+        if message.content.startswith("!redeem"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            if len(parts) < 2:
+                await message.reply("Use `!redeem <code>`")
+                return
+            code = parts[1]
+            reward = redeem_code(user_id, code)
+            if reward:
+                await message.reply(f"🟢 | You redeemed `{code}` and received {reward} coins!")
+            else:
+                await message.reply("🔴 | This code is either invalid or has been already used!")
 
         if message.content.startswith(("!leaderboard", "!lb")):
             if message.guild is None:
@@ -459,48 +408,20 @@ if message.content.startswith("!payloan"):
                 return
             await message.reply("**🏆 Server Leaderboard**\n" + 
                 "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
-
-        if message.content.startswith("!rob"):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.") 
-                return
-            if not message.mentions or str(message.mentions[0].id) == user_id:
-                await message.reply(f"Use `!rob @user`")
-                return
-            await message.reply(rob_user(user_id, str(message.mentions[0].id)))
-            
-        if message.content.startswith("!redeem"):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.") 
-                return
-            if len(parts) < 2:
-                await message.reply(f"Use `!redeem <code>`")
-                return
-            code = parts[1]
-            reward = redeem_code(user_id, code)
-            if reward:
-                await message.reply(f"🟢 | You redeemed `{code}` and received {reward} coins!")
-            else:
-                await message.reply(f"🔴 | This code is either invalid or has been already used!")
-
-
+        
+        # !pay command
         if message.content.startswith("!pay"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
                 return
             if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.") 
+                await message.reply("❌ | You are **banned** from using this bot.")
                 return
             if len(parts) < 3 or not message.mentions or not parts[2].isdigit():
-                await message.reply(f"use `!pay @user <amount>`")
+                await message.reply("Use `!pay @user <amount>`")
                 return
-            await message.reply(pay_user(user_id, str(message.mentions[0].id), int(parts[2])))
+            result = pay_user(user_id, str(message.mentions[0].id), int(parts[2]))
+            await message.reply(result)
 
 if message.content.startswith(("!coinflip", "!cf")):
     if message.guild is None:
@@ -589,16 +510,16 @@ if message.content.startswith("!gamble"):
         update_balance(user_id, -bet)
         await message.reply(f"😢 | You lost {bet} coins! New balance is {get_balance(user_id)} coins.")
 
+        
+        await self.process_commands(message)
 
 
-    await client.process_commands(message)
-
+# --- Main Execution ---
 if __name__ == "__main__":
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask).start()
     print("Flask server is running...")
 
-# Create an instance of the bot and run it
-client = SelfBot()
-client.run(TOKEN)
+    client = SelfBot()
+    client.run(TOKEN)
