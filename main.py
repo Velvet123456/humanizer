@@ -246,9 +246,11 @@ class SelfBot(discord.Client):
                 "`!daily` - Claim daily rewards.\n"
                 "`!gamble <amount/all>` - Gamble coins.\n"
                 "`!coinflip <amount> <heads/tails>` - Coinflip.\n"
+                "`!loan <amount>` - Take loan from the bank.\n"
                 "`!redeem <code>` - Redeem a code.\n"
                 "`!rob @user` - Steal coins from others.\n"
                 "`!pay @user <amount>` - Transfer coins to someone.\n"
+                "`!payloan <amount>` - Pay back the loan amount taken.\n"
                 "`!leaderboard` - Check The Server Leaderboard.\n"
             )
 
@@ -282,6 +284,16 @@ class SelfBot(discord.Client):
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.") 
                 return
+
+                user_ref = db.reference(f"users/{user_id}")
+    user_data = user_ref.get() or {}
+    loan_deadline = user_data.get("loan_deadline", 0)
+    current_loan = user_data.get("loan", 0)
+    loan_paid = user_data.get("loan_paid", 0)
+
+    if loan_deadline > 0 and time.time() > loan_deadline and current_loan - loan_paid > 0:
+        await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
+        return
             last_work_ref = db.reference(f"users/{user_id}/last_work")
             last_work = last_work_ref.get() or 0
             now = int(time.time())
@@ -308,7 +320,102 @@ class SelfBot(discord.Client):
             await message.reply(response)
 
 
+if message.content.startswith("!loan"):
+    if message.guild is None:
+        await message.reply("❌ This command can only be used in a server!")
+        return
 
+    if is_banned(message.author.id):
+        await message.reply("❌ | You are **banned** from using this bot.") 
+        return
+
+    args = message.content.split()
+    if len(args) < 2 or not args[1].isdigit():
+        await message.reply("❌ Usage: `!loan <amount>`")
+        return
+
+    amount = int(args[1])
+    if amount <= 0 or amount > 2000:
+        await message.reply("❌ You can only take a loan between 1 and 2000 coins!")
+        return
+
+    user_ref = db.reference(f"users/{user_id}")
+    user_data = user_ref.get() or {}
+    current_loan = user_data.get("loan", 0)
+
+    if current_loan > 0:
+        await message.reply(f"❌ You already have an active loan of {current_loan} coins! Repay it first.")
+        return
+
+    interest = int(amount * 0.10)
+    total_repay = amount + interest
+    deadline = int(time.time()) + 86400  # 24 hours from now
+
+    user_ref.update({
+        "loan": total_repay,
+        "loan_deadline": deadline,
+        "loan_paid": 0
+    })
+
+    update_balance(user_id, amount)
+
+    await message.reply(f"✅ You have borrowed {amount} coins. You need to repay **{total_repay}** coins within **24 hours** or you will be blocked from `!work` and `!gamble`.")
+
+if message.content.startswith("!payloan"):
+    if message.guild is None:
+        await message.reply("❌ This command can only be used in a server!")
+        return
+
+    if is_banned(message.author.id):
+        await message.reply("❌ | You are **banned** from using this bot.") 
+        return
+
+    args = message.content.split()
+    if len(args) < 2 or not args[1].isdigit():
+        await message.reply("❌ Usage: `!payloan <amount>`")
+        return
+
+    amount = int(args[1])
+    user_ref = db.reference(f"users/{user_id}")
+    user_data = user_ref.get() or {}
+    current_loan = user_data.get("loan", 0)
+    loan_paid = user_data.get("loan_paid", 0)
+    loan_deadline = user_data.get("loan_deadline", 0)
+
+    if current_loan == 0:
+        await message.reply("✅ You have no active loans to repay!")
+        return
+
+    balance = get_balance(user_id)
+    if amount > balance:
+        await message.reply(f"❌ You only have **{balance}** coins!")
+        return
+
+    if amount > current_loan - loan_paid:
+        amount = current_loan - loan_paid
+
+    update_balance(user_id, -amount)
+    loan_paid += amount
+    remaining_loan = current_loan - loan_paid
+
+    user_ref.update({
+        "loan_paid": loan_paid
+    })
+
+    # Calculate time left
+    time_left = max(0, loan_deadline - int(time.time()))
+    hours = time_left // 3600
+    minutes = (time_left % 3600) // 60
+
+    if remaining_loan == 0:
+        user_ref.update({
+            "loan": 0,
+            "loan_deadline": 0,
+            "loan_paid": 0
+        })
+        await message.reply("✅ You have fully repaid your loan! You can now use `!work` and `!gamble` again.")
+    else:
+        await message.reply(f"✅ Paid {loan_paid}/{current_loan}$, the deadline is in {hours}h {minutes}m.")
 
 
         if message.content.startswith("!daily"):
@@ -389,6 +496,16 @@ class SelfBot(discord.Client):
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.") 
                 return
+
+                user_ref = db.reference(f"users/{user_id}")
+    user_data = user_ref.get() or {}
+    loan_deadline = user_data.get("loan_deadline", 0)
+    current_loan = user_data.get("loan", 0)
+    loan_paid = user_data.get("loan_paid", 0)
+
+    if loan_deadline > 0 and time.time() > loan_deadline and current_loan - loan_paid > 0:
+        await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
+        return
             if len(parts) < 3:
                 await message.reply(f"Use `!coinflip <amount/all> <heads/tails>`")
                 return
@@ -428,6 +545,16 @@ class SelfBot(discord.Client):
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.") 
                 return
+
+                user_ref = db.reference(f"users/{user_id}")
+    user_data = user_ref.get() or {}
+    loan_deadline = user_data.get("loan_deadline", 0)
+    current_loan = user_data.get("loan", 0)
+    loan_paid = user_data.get("loan_paid", 0)
+
+    if loan_deadline > 0 and time.time() > loan_deadline and current_loan - loan_paid > 0:
+        await message.reply("❌ You failed to repay your loan on time! You cannot use `!work` or `!gamble` until you **fully repay** your loan.")
+        return
             if len(parts) < 2 or (not parts[1].isdigit() and parts[1] != "all"):
                 await message.reply(f"Use `!gamble <amount/all>`")
                 return
