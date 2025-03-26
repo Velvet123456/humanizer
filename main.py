@@ -321,10 +321,11 @@ earnings = random.randint(50, 200)
 update_balance(user_id, earnings)
 xp_message = update_xp(user_id, 3)
 
-            response = f"You worked as a {job} and earned {earnings} coins! New balance: {get_balance(user_id)} coins."
-            if xp_message:
-                response += "\n" + xp_message
-            await message.reply(response)
+response = f"You worked as a {job} and earned {earnings} coins! New balance: {get_balance(user_id)} coins."
+if xp_message:
+    response += "\n" + xp_message
+
+await message.reply(response)
 
 
 if message.content.startswith("!loan"):
