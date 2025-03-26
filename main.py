@@ -163,9 +163,9 @@ def update_xp(user_id, amount):
 
 class SelfBot(discord.Client):
     def __init__(self):
-        intents = discord.Intents.all()  # Ensures all possible intents are enabled
-        super().__init__(intents=intents, self_bot=True)
+        super().__init__(self_bot=True)
         self.command_prefix = "!"
+
         
     async def on_ready(self):
         print(f"Logged in as {self.user}")
