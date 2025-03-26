@@ -143,7 +143,13 @@ def rob_user(robber_id, victim_id):
 
 def update_balance(user_id, amount):
     user_ref = db.reference(f"users/{user_id}")
-    user_ref.update({"balance": user_ref.get().get("balance", 0) + amount})
+    current_data = user_ref.get()
+    if current_data is None or not isinstance(current_data, dict):
+        current_balance = 0
+    else:
+        current_balance = current_data.get("balance", 0)
+    user_ref.update({"balance": current_balance + amount})
+
 
 
 def pay_user(sender_id, receiver_id, amount):
