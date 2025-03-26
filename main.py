@@ -388,9 +388,9 @@ class SelfBot(discord.Client):
                     "loan_deadline": 0,
                     "loan_paid": 0
                 })
-                await message.reply("✅ You have fully repaid your loan! You can now use `!work` and `!gamble` again.")
+                await message.reply("✅ You have fully repaid your loan! You can now use all commands again.")
             else:
-                await message.reply(f"✅ Paid {loan_paid}/{current_loan}$, Deadline: {hours}h {minutes}m.")
+                await message.reply(f"✅ Paid {loan_paid}/{current_loan}$, Time Left: {hours}h {minutes}m.")
         
         # !rob command
         if message.content.startswith("!rob"):
