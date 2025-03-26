@@ -110,7 +110,7 @@ def rob_user(robber_id, victim_id):
     robber_data = robber_ref.get()
     
     if not victim_data or not robber_data:
-        return "❌ User data not found in the database."
+        return "❌ User never used the bot (Doesn't have any money)"
     
     victim_balance = victim_data.get("balance", 0)
     robber_balance = robber_data.get("balance", 0)
