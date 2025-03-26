@@ -308,13 +308,18 @@ if remaining > 0:
     await message.reply(f"Please wait {minutes}m {seconds}s before working again!")
     return
 
+last_work_ref.set(now)
 
-            jobs = ["skid","awp.gg developer","grass toucher","farmer","stripper","discord e-girls server manager","wave developer","footballer","sigma","dancer","robber","byfron developer"]
-            job = random.choice(jobs)
-            earnings = random.randint(50, 200)
-            update_balance(user_id, earnings)
-            xp_message = update_xp(user_id, 3)
-            last_work_ref.set(now)
+
+jobs = ["skid", "awp.gg developer", "grass toucher", "farmer", "stripper", "discord e-girls server manager", 
+        "wave developer", "footballer", "sigma", "dancer", "robber", "byfron developer"]
+
+job = random.choice(jobs)
+earnings = random.randint(50, 200)
+
+
+update_balance(user_id, earnings)
+xp_message = update_xp(user_id, 3)
 
             response = f"You worked as a {job} and earned {earnings} coins! New balance: {get_balance(user_id)} coins."
             if xp_message:
