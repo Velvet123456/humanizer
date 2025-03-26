@@ -77,13 +77,24 @@ def set_last_claim(user_id, timestamp):
     ref.set(timestamp)
 
 def redeem_code(user_id, code):
+    code = code.lower() 
+    codes_ref = db.reference("codes")
+    all_codes = codes_ref.get() 
+    
+    print(f"DEBUG: All codes in Firebase ->", all_codes) 
+
     ref = db.reference(f"codes/{code}")
     reward = ref.get()
+
+    print(f"DEBUG: Fetching code '{code}' ->", reward)
+
     if reward and not db.reference(f"redeemed/{code}/{user_id}").get():
         update_balance(user_id, reward)
         db.reference(f"redeemed/{code}/{user_id}").set(True)
         return reward
+    
     return None
+
 
 def rob_user(robber_id, victim_id):
     # Fetching user data from the database
