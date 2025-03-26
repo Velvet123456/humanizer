@@ -161,10 +161,10 @@ def update_xp(user_id, amount):
     db.reference(f"users/{user_id}/xp").set(new_xp)
     return None
 
-# --- Self-Bot Class ---
 class SelfBot(discord.Client):
     def __init__(self):
-        super().__init__(self_bot=True)
+        intents = discord.Intents.all()  # Ensures all possible intents are enabled
+        super().__init__(intents=intents, self_bot=True)
         self.command_prefix = "!"
         
     async def on_ready(self):
