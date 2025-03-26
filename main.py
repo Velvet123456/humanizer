@@ -64,9 +64,14 @@ def get_balance(user_id):
     return balance
 
 def update_balance(user_id, amount):
-    ref = db.reference(f"users/{user_id}/balance")
-    current_balance = ref.get() or 0
-    ref.set(current_balance + amount)
+    user_ref = db.reference(f"users/{user_id}")
+    user_data = user_ref.get() 
+    if user_data is None: 
+        user_data = {"balance": 0}
+
+    new_balance = user_data.get("balance", 0) + amount  
+    user_ref.set({"balance": new_balance}) 
+
 
 def get_last_claim(user_id):
     ref = db.reference(f"users/{user_id}/last_daily")
