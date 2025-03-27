@@ -112,10 +112,11 @@ def pay_user(sender_id, receiver_id, amount):
 
 def get_server_leaderboard(guild):
     leaderboard = sorted(
-        [(m.name, get_balance(str(m.id)) or 0) for m in guild.members if not m.bot and str(m.id) not in BLACKLISTED_IDS],
+        [(m.name, int(get_balance(str(m.id)) or 0)) for m in guild.members if not m.bot and str(m.id) not in BLACKLISTED_IDS],
         key=lambda x: x[1], reverse=True
     )[:5]
     return leaderboard
+
 
 
 def get_global_leaderboard():
