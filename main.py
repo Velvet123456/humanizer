@@ -211,17 +211,17 @@ class SelfBot(discord.Client):
                 slot_result = [chosen, chosen, chosen]
                 winnings = bet * 3
                 update_balance(user_id, winnings)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won 3x! (+{winnings}) (Balance: {get_balance(user_id)})")
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
             elif roll <= 0.35:  # 30% chance for 2x win
                 chosen = random.choice(emojis)
                 slot_result = [chosen, chosen, random.choice(emojis)]
                 winnings = bet * 2
                 update_balance(user_id, winnings)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won 2x! (+{winnings}) (Balance: {get_balance(user_id)})")
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
             else:  # 55% chance to lose
                 slot_result = [random.choice(emojis) for _ in range(3)]
                 update_balance(user_id, -bet)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost {bet}! (Balance: {get_balance(user_id)})")
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
 
 
         
