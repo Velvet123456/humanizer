@@ -201,15 +201,23 @@ class SelfBot(discord.Client):
             if bet > balance or bet <= 0:
                 await message.reply("Invalid Bet Amount!")
                 return
-            # 20% chance of winning
-            if random.random() <= 0.20:
-                update_balance(user_id, bet)
-                xp_message = update_xp(user_id, 4)
-                await message.reply(f"😍 | You won {bet} coins! New balance is {get_balance(user_id)} coins.")
-            else:
-                xp_message = update_xp(user_id, 4)
+            
+            # Slot machine emojis
+            emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
+            slot_result = [random.choice(emojis) for _ in range(3)]
+
+            if slot_result[0] == slot_result[1] == slot_result[2]:  # Three matching emojis (3x win)
+                winnings = bet * 3
+                update_balance(user_id, winnings)
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won 3x! (+{winnings}) (Balance: {get_balance(user_id)})")
+            elif slot_result[0] == slot_result[1] or slot_result[1] == slot_result[2] or slot_result[0] == slot_result[2]:  # Two matching emojis (2x win)
+                winnings = bet * 2
+                update_balance(user_id, winnings)
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won 2x! (+{winnings}) (Balance: {get_balance(user_id)})")
+            else:  # Loss
                 update_balance(user_id, -bet)
-                await message.reply(f"😢 | You lost {bet} coins! New balance is {get_balance(user_id)} coins.")
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost {bet}! (Balance: {get_balance(user_id)})")
+
         
         if message.content.startswith("!help"):
             if message.guild is None:
