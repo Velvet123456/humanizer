@@ -119,18 +119,17 @@ def get_server_leaderboard(guild):
 
 
 
-def get_global_leaderboard():
+def get_overall_leaderboard():
     ref = db.reference("users")
-    users = ref.get()
-    if not users:
-        return []
+    users = ref.get() or {}
     filtered_users = {uid: data for uid, data in users.items() if uid not in BLACKLISTED_IDS}
     leaderboard = sorted(
         filtered_users.items(),
-        key=lambda x: x[1].get("balance", 0),
+        key=lambda x: int(x[1].get("balance", 0)),
         reverse=True
     )[:5]
     return leaderboard
+
 
 def get_xp(user_id):
     ref = db.reference(f"users/{user_id}/xp")
@@ -514,11 +513,11 @@ class SelfBot(discord.Client):
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
-            leaderboard = get_server_leaderboard(message.guild)
+            leaderboard = get_overall_leaderboard(message.guild)
             if not leaderboard:
                 await message.reply("❌ | No users found in this server!")
                 return
-            await message.reply("**🏆 Server Leaderboard**\n" + 
+            await message.reply("**🏆 Leaderboard**\n" + 
                 "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
 
 
