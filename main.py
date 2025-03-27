@@ -23,7 +23,7 @@ def home():
     return "Self-bot is running!"
 
 # --- Firebase Setup ---
-BLACKLISTED_IDS = ["1317890350471319633", "909446748613779486"]
+BLACKLISTED_IDS = ["1317890350471319633", "909446748613779486","1354087903126487120"]
 
 cred = credentials.Certificate("rohackersz-firebase-adminsdk-fbsvc-ef11a7abad.json")
 firebase_admin.initialize_app(cred, {
