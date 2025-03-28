@@ -517,7 +517,7 @@ class SelfBot(discord.Client):
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
-            leaderboard = get_overall_leaderboard(message.guild)
+            leaderboard = get_overall_leaderboard()
             if not leaderboard:
                 await message.reply("❌ | No users found in this server!")
                 return
