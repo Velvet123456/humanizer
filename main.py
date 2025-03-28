@@ -122,17 +122,16 @@ def get_server_leaderboard(guild):
 def get_overall_leaderboard(client):
     users_ref = db.reference("users")
     users_data = users_ref.get() or {}
-
     leaderboard = sorted(
         [
-            (client.get_user(int(user_id)).name, data.get("balance", 0))
+            (client.get_user(int(user_id)).name, int(data.get("balance", 0)))
             for user_id, data in users_data.items()
-            if client.get_user(int(user_id))  # Ensures the user exists
+            if client.get_user(int(user_id)) is not None
         ],
         key=lambda x: x[1], reverse=True
-    )[:5]  # Only top 5 users
-
+    )[:5]
     return leaderboard
+
 
 
 
@@ -511,20 +510,20 @@ class SelfBot(discord.Client):
                 update_balance(user_id, -bet)
                 await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
         
-        # !leaderboard command
-        if message.content.startswith(("!leaderboard", "!lb")):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.")
-                return
-            leaderboard = get_overall_leaderboard()
-            if not leaderboard:
-                await message.reply("❌ | No users found in this server!")
-                return
-            await message.reply("**🏆 Leaderboard**\n" + 
-                "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
+if message.content.startswith(("!leaderboard", "!lb")):
+    if message.guild is None:
+        await message.reply("❌ This command can only be used in a server!")
+        return
+    if is_banned(message.author.id):
+        await message.reply("❌ | You are **banned** from using this bot.")
+        return
+    leaderboard = get_overall_leaderboard(self)
+    if not leaderboard:
+        await message.reply("❌ | No users found in this server!")
+        return
+    await message.reply("**🏆 Leaderboard**\n" +
+        "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
+
 
 
 
