@@ -12,7 +12,6 @@ import time
 # --- Flask Uptime Server ---
 app = Flask(__name__)
 load_dotenv()
-
 TOKEN = os.getenv("DISCORD_TOKEN")
 if not TOKEN:
     print("Error: DISCORD_TOKEN is not set in .env file")
@@ -23,13 +22,11 @@ def home():
     return "Self-bot is running!"
 
 # --- Firebase Setup ---
-BLACKLISTED_IDS = ["1317890350471319633", "909446748613779486","1354087903126487120"]
-
+BLACKLISTED_IDS = ["1317890350471319633", "909446748613779486", "1354087903126487120"]
 cred = credentials.Certificate("rohackersz-firebase-adminsdk-fbsvc-ef11a7abad.json")
 firebase_admin.initialize_app(cred, {
     "databaseURL": "https://rohackersz-default-rtdb.firebaseio.com/"
 })
-
 ban_ref = db.reference("economyban")
 
 def is_banned(user_id: int) -> bool:
@@ -113,10 +110,10 @@ def pay_user(sender_id, receiver_id, amount):
 def get_server_leaderboard(guild):
     leaderboard = sorted(
         [(m.name, get_balance(str(m.id)) or 0) for m in guild.members if not m.bot and str(m.id) not in BLACKLISTED_IDS],
-        key=lambda x: x[1], reverse=True
+        key=lambda x: x[1],
+        reverse=True
     )[:5]
     return leaderboard
-
 
 def get_global_leaderboard():
     ref = db.reference("users")
@@ -166,86 +163,86 @@ class SelfBot(discord.Client):
     def __init__(self):
         super().__init__(self_bot=True)
         self.command_prefix = "!"
-        
+
     async def on_ready(self):
         print(f"Logged in as {self.user}")
-        
-    async def on_message(self, message):        
+
+    async def on_message(self, message):
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
-if message.content.startswith("!gamble"):
-    if message.guild is None:
-        await message.reply("❌ This command can only be used in a server!")
-        return
-    if is_banned(message.author.id):
-        await message.reply("❌ | You are **banned** from using this bot.")
-        return
-    user_ref = db.reference(f"users/{user_id}")
-    user_data = user_ref.get() or {}
-    loan_deadline = user_data.get("loan_deadline", 0)
-    current_loan = user_data.get("loan", 0)
-    loan_paid = user_data.get("loan_paid", 0)
-    lucky = user_data.get("lucky", False)  # Check if user is lucky
+        if message.author == self.user:
+            return
 
-    if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-        await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
-        return
-    if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
-        await message.reply("Use !gamble <amount/all>")
-        return
-    balance = get_balance(user_id)
-    bet = balance if parts[1].lower() == "all" else int(parts[1])
-    if bet > balance or bet <= 0:
-        await message.reply("Invalid Bet Amount!")
-        return
+        if message.content.startswith("!gamble"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            loan_deadline = user_data.get("loan_deadline", 0)
+            current_loan = user_data.get("loan", 0)
+            loan_paid = user_data.get("loan_paid", 0)
+            lucky = user_data.get("lucky", False)
 
-    # Slot machine emojis
-    emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
+            # Check if user is lucky
+            if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
+                return
+            if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
+                await message.reply("Use !gamble <amount/all>")
+                return
+            balance = get_balance(user_id)
+            bet = balance if parts[1].lower() == "all" else int(parts[1])
+            if bet > balance or bet <= 0:
+                await message.reply("Invalid Bet Amount!")
+                return
 
-    roll = random.random()
-    if lucky or roll <= 0.10:  # 10% chance for 3x win, always 3x if lucky
-        chosen = random.choice(emojis)
-        slot_result = [chosen, chosen, chosen]
-        winnings = bet * 3
-        update_balance(user_id, winnings)
-        await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
-    elif roll <= 0.35:  # 30% chance for 2x win
-        chosen = random.choice(emojis)
-        slot_result = [chosen, chosen, random.choice(emojis)]
-        winnings = bet * 2
-        update_balance(user_id, winnings)
-        await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
-    else:  # 55% chance to lose
-        slot_result = [random.choice(emojis) for _ in range(3)]
-        update_balance(user_id, -bet)
-        await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+            # Slot machine emojis
+            emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
+            roll = random.random()
+            if lucky or roll <= 0.10:  # 10% chance for 3x win, always 3x if lucky
+                chosen = random.choice(emojis)
+                slot_result = [chosen, chosen, chosen]
+                winnings = bet * 3
+                update_balance(user_id, winnings)
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
+            elif roll <= 0.35:  # 30% chance for 2x win
+                chosen = random.choice(emojis)
+                slot_result = [chosen, chosen, random.choice(emojis)]
+                winnings = bet * 2
+                update_balance(user_id, winnings)
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
+            else:  # 55% chance to lose
+                slot_result = [random.choice(emojis) for _ in range(3)]
+                update_balance(user_id, -bet)
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
 
-if message.content.startswith("!lottery"):
-    if message.guild is None:
-        await message.reply("❌ This command can only be used in a server!")
-        return
-    if is_banned(message.author.id):
-        await message.reply("❌ | You are **banned** from using this bot.")
-        return
-    ticket_price = 100
-    balance = get_balance(user_id)
-    if balance < ticket_price:
-        await message.reply("Purchase failed, Insufficient funds!")
-        return
-    update_balance(user_id, -ticket_price)
+        if message.content.startswith("!lottery"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            ticket_price = 100
+            balance = get_balance(user_id)
+            if balance < ticket_price:
+                await message.reply("Purchase failed, Insufficient funds!")
+                return
+            update_balance(user_id, -ticket_price)
+            if random.random() <= 0.50:  # 50% chance to win
+                prize = random.randint(800, 1500) if lucky else random.randint(1, 1000)  # Lucky users always get 800+
+                update_balance(user_id, prize)
+                new_balance = get_balance(user_id)
+                await message.reply(f"Buying a lottery ticket...\nScratching the ticket...\nYou won **{prize}$**! (Balance: {new_balance})")
+            else:
+                new_balance = get_balance(user_id)
+                await message.reply(f"Buying a lottery ticket...\nScratching the ticket...\nUnfortunately, you didn't win anything. (Balance: {new_balance})")
 
-    if random.random() <= 0.50:  # 50% chance to win
-        prize = random.randint(800, 1500) if lucky else random.randint(1, 1000)  # Lucky users always get 800+
-        update_balance(user_id, prize)
-        new_balance = get_balance(user_id)
-        await message.reply(f"Buying a lottery ticket...\nScratching the ticket...\nYou won **{prize}$**! (Balance: {new_balance})")
-    else:
-        new_balance = get_balance(user_id)
-        await message.reply(f"Buying a lottery ticket...\nScratching the ticket...\nUnfortunately, you didn't win anything. (Balance: {new_balance})")
-
-
-        
         if message.content.startswith("!help"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
@@ -267,7 +264,7 @@ if message.content.startswith("!lottery"):
                 "`!transfer @user <amount>` - Transfer coins to someone.\n"
                 "`!leaderboard` - Check The Server Leaderboard.\n"
             )
-        
+
         # !profile command
         if message.content.startswith("!profile"):
             if message.guild is None:
@@ -290,7 +287,7 @@ if message.content.startswith("!lottery"):
                 f"3. XP: {xp}/{xp_needed}"
             )
             await message.reply(profile_msg)
-        
+
         # !work command
         if message.content.startswith("!work"):
             if message.guild is None:
@@ -319,9 +316,8 @@ if message.content.startswith("!lottery"):
                 return
             last_work_ref.set(now)
             jobs = [
-                "skid", "awp.gg developer", "grass toucher", "farmer", "stripper",
-                "discord e-girls server manager", "wave developer", "footballer", "sigma",
-                "dancer", "robber", "byfron developer"
+                "skid", "awp.gg developer", "grass toucher", "farmer", "stripper", "discord e-girls server manager",
+                "wave developer", "footballer", "sigma", "dancer", "robber", "byfron developer"
             ]
             job = random.choice(jobs)
             earnings = random.randint(50, 200)
@@ -331,7 +327,7 @@ if message.content.startswith("!lottery"):
             if xp_message:
                 response += "\n" + xp_message
             await message.reply(response)
-        
+
         # !daily command
         if message.content.startswith("!daily"):
             if message.guild is None:
@@ -347,7 +343,7 @@ if message.content.startswith("!lottery"):
                 set_last_claim(user_id, int(time.time()))
                 xp_message = update_xp(user_id, 30)
                 await message.reply(f"👴 | Claimed your daily 500 coins! {xp_message if xp_message else ''}")
-        
+
         # !loan command
         if message.content.startswith("!loan"):
             if message.guild is None:
@@ -381,7 +377,7 @@ if message.content.startswith("!lottery"):
             })
             update_balance(user_id, amount)
             await message.reply(f"✅ You have borrowed {amount} coins. You need to repay {total_repay} coins within 24 hours or you'll be blocked from some commands.")
-        
+
         # !payloan command
         if message.content.startswith("!payloan"):
             if message.guild is None:
