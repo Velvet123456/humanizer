@@ -448,6 +448,7 @@ if message.content.startswith(("!leaderboard", "!lb")):
     await message.reply("**🏆 Leaderboard**\n" +
         "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
 
+
         
 if message.content.startswith("!redeem"):
     if message.guild is None:
