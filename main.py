@@ -178,50 +178,75 @@ class SelfBot(discord.Client):
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
-        if message.content.startswith("!gamble"):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.")
-                return
-            user_ref = db.reference(f"users/{user_id}")
-            user_data = user_ref.get() or {}
-            loan_deadline = user_data.get("loan_deadline", 0)
-            current_loan = user_data.get("loan", 0)
-            loan_paid = user_data.get("loan_paid", 0)
-            if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
-                return
-            if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
-                await message.reply("Use !gamble <amount/all>")
-                return
-            balance = get_balance(user_id)
-            bet = balance if parts[1].lower() == "all" else int(parts[1])
-            if bet > balance or bet <= 0:
-                await message.reply("Invalid Bet Amount!")
-                return
-            
-            # Slot machine emojis
-            emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
-            
-            roll = random.random()
-            if roll <= 0.10:  # 15% chance for 3x win
-                chosen = random.choice(emojis)
-                slot_result = [chosen, chosen, chosen]
-                winnings = bet * 3
-                update_balance(user_id, winnings)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
-            elif roll <= 0.35:  # 30% chance for 2x win
-                chosen = random.choice(emojis)
-                slot_result = [chosen, chosen, random.choice(emojis)]
-                winnings = bet * 2
-                update_balance(user_id, winnings)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
-            else:  # 55% chance to lose
-                slot_result = [random.choice(emojis) for _ in range(3)]
-                update_balance(user_id, -bet)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+if message.content.startswith("!gamble"):
+    if message.guild is None:
+        await message.reply("❌ This command can only be used in a server!")
+        return
+    if is_banned(message.author.id):
+        await message.reply("❌ | You are **banned** from using this bot.")
+        return
+    user_ref = db.reference(f"users/{user_id}")
+    user_data = user_ref.get() or {}
+    loan_deadline = user_data.get("loan_deadline", 0)
+    current_loan = user_data.get("loan", 0)
+    loan_paid = user_data.get("loan_paid", 0)
+    lucky = user_data.get("lucky", False)  # Check if user is lucky
+
+    if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+        await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
+        return
+    if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
+        await message.reply("Use !gamble <amount/all>")
+        return
+    balance = get_balance(user_id)
+    bet = balance if parts[1].lower() == "all" else int(parts[1])
+    if bet > balance or bet <= 0:
+        await message.reply("Invalid Bet Amount!")
+        return
+
+    # Slot machine emojis
+    emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
+
+    roll = random.random()
+    if lucky or roll <= 0.10:  # 10% chance for 3x win, always 3x if lucky
+        chosen = random.choice(emojis)
+        slot_result = [chosen, chosen, chosen]
+        winnings = bet * 3
+        update_balance(user_id, winnings)
+        await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
+    elif roll <= 0.35:  # 30% chance for 2x win
+        chosen = random.choice(emojis)
+        slot_result = [chosen, chosen, random.choice(emojis)]
+        winnings = bet * 2
+        update_balance(user_id, winnings)
+        await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
+    else:  # 55% chance to lose
+        slot_result = [random.choice(emojis) for _ in range(3)]
+        update_balance(user_id, -bet)
+        await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+
+if message.content.startswith("!lottery"):
+    if message.guild is None:
+        await message.reply("❌ This command can only be used in a server!")
+        return
+    if is_banned(message.author.id):
+        await message.reply("❌ | You are **banned** from using this bot.")
+        return
+    ticket_price = 100
+    balance = get_balance(user_id)
+    if balance < ticket_price:
+        await message.reply("Purchase failed, Insufficient funds!")
+        return
+    update_balance(user_id, -ticket_price)
+
+    if random.random() <= 0.50:  # 50% chance to win
+        prize = random.randint(800, 1500) if lucky else random.randint(1, 1000)  # Lucky users always get 800+
+        update_balance(user_id, prize)
+        new_balance = get_balance(user_id)
+        await message.reply(f"Buying a lottery ticket...\nScratching the ticket...\nYou won **{prize}$**! (Balance: {new_balance})")
+    else:
+        new_balance = get_balance(user_id)
+        await message.reply(f"Buying a lottery ticket...\nScratching the ticket...\nUnfortunately, you didn't win anything. (Balance: {new_balance})")
 
 
         
@@ -462,48 +487,49 @@ class SelfBot(discord.Client):
             xp_message = update_xp(user_id, 6)
             await message.reply(result)
         
-        # !coinflip command
-        if message.content.startswith(("!coinflip", "!cf")):
-            if message.guild is None:
-                await message.reply("❌ | This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.")
-                return
-            user_ref = db.reference(f"users/{user_id}")
-            user_data = user_ref.get() or {}
-            loan_deadline = user_data.get("loan_deadline", 0)
-            current_loan = user_data.get("loan", 0)
-            loan_paid = user_data.get("loan_paid", 0)
-            if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
-                return
-            if len(parts) < 3:
-                await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
-                return
-            choice = parts[2].lower()
-            if choice not in ["heads", "tails"]:
-                await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
-                return
-            balance = get_balance(user_id)
-            if parts[1].lower() == "all":
-                bet = balance
-            elif parts[1].isdigit():
-                bet = int(parts[1])
-            else:
-                await message.reply("Invalid bet amount!")
-                return
-            if bet > balance or bet <= 0:
-                await message.reply("You don't have enough coins!")
-                return
-            result = random.choice(["heads", "tails"])
-            if result == choice:
-                update_balance(user_id, bet)
-                xp_message = update_xp(user_id, 5)
-                await message.reply(f"✅ The coin landed on **{result}**! You won {bet} coins! New balance: {get_balance(user_id)} coins.")
-            else:
-                update_balance(user_id, -bet)
-                await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
+if message.content.startswith(("!coinflip", "!cf")):
+    if message.guild is None:
+        await message.reply("❌ | This command can only be used in a server!")
+        return
+    if is_banned(message.author.id):
+        await message.reply("❌ | You are **banned** from using this bot.")
+        return
+    user_ref = db.reference(f"users/{user_id}")
+    user_data = user_ref.get() or {}
+    loan_deadline = user_data.get("loan_deadline", 0)
+    current_loan = user_data.get("loan", 0)
+    loan_paid = user_data.get("loan_paid", 0)
+    lucky = user_data.get("lucky", False)
+
+    if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+        await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
+        return
+    if len(parts) < 3:
+        await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
+        return
+    choice = parts[2].lower()
+    if choice not in ["heads", "tails"]:
+        await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
+        return
+    balance = get_balance(user_id)
+    if parts[1].lower() == "all":
+        bet = balance
+    elif parts[1].isdigit():
+        bet = int(parts[1])
+    else:
+        await message.reply("Invalid bet amount!")
+        return
+    if bet > balance or bet <= 0:
+        await message.reply("You don't have enough coins!")
+        return
+
+    result = choice if lucky else random.choice(["heads", "tails"])  # Lucky users always win
+    if result == choice:
+        update_balance(user_id, bet)
+        await message.reply(f"✅ The coin landed on **{result}**! You won {bet} coins! New balance: {get_balance(user_id)} coins.")
+    else:
+        update_balance(user_id, -bet)
+        await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
         
         # !leaderboard command
         if message.content.startswith(("!leaderboard", "!lb")):
