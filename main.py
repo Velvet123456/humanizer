@@ -112,29 +112,24 @@ def pay_user(sender_id, receiver_id, amount):
 
 def get_server_leaderboard(guild):
     leaderboard = sorted(
-        [(m.name, int(get_balance(str(m.id)) or 0)) for m in guild.members if not m.bot and str(m.id) not in BLACKLISTED_IDS],
+        [(m.name, get_balance(str(m.id)) or 0) for m in guild.members if not m.bot and str(m.id) not in BLACKLISTED_IDS],
         key=lambda x: x[1], reverse=True
     )[:5]
     return leaderboard
 
 
-
-def get_overall_leaderboard(client):
-    users_ref = db.reference("users")
-    users_data = users_ref.get() or {}
+def get_global_leaderboard():
+    ref = db.reference("users")
+    users = ref.get()
+    if not users:
+        return []
+    filtered_users = {uid: data for uid, data in users.items() if uid not in BLACKLISTED_IDS}
     leaderboard = sorted(
-        [
-            (client.get_user(int(user_id)).name, int(data.get("balance", 0)))
-            for user_id, data in users_data.items()
-            if client.get_user(int(user_id)) is not None
-        ],
-        key=lambda x: x[1], reverse=True
+        filtered_users.items(),
+        key=lambda x: x[1].get("balance", 0),
+        reverse=True
     )[:5]
     return leaderboard
-
-
-
-
 
 def get_xp(user_id):
     ref = db.reference(f"users/{user_id}/xp")
@@ -433,40 +428,24 @@ class SelfBot(discord.Client):
                 return
             result = rob_user(user_id, str(message.mentions[0].id))
             await message.reply(result)
-
-if message.content.startswith(("!leaderboard", "!lb")):
-    if message.guild is None:
-        await message.reply("❌ This command can only be used in a server!")
-        return
-    if is_banned(message.author.id):
-        await message.reply("❌ | You are **banned** from using this bot.")
-        return
-    leaderboard = get_overall_leaderboard(self)
-    if not leaderboard:
-        await message.reply("❌ | No users found in this server!")
-        return
-    await message.reply("**🏆 Leaderboard**\n" +
-        "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
-
-
         
-if message.content.startswith("!redeem"):
-    if message.guild is None:
-        await message.reply("❌ This command can only be used in a server!")
-        return
-    if is_banned(message.author.id):
-        await message.reply("❌ | You are **banned** from using this bot.")
-        return
-    if len(parts) < 2:
-        await message.reply("Use `!redeem <code>`")
-        return
-    code = parts[1]
-    reward = redeem_code(user_id, code)
-    if reward:
-        await message.reply(f"🟢 | You redeemed `{code}` and received {reward} coins!")
-    else:
-        await message.reply("🔴 | This code is either invalid or has been already used!")
-
+        # !redeem command
+        if message.content.startswith("!redeem"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            if len(parts) < 2:
+                await message.reply("Use `!redeem <code>`")
+                return
+            code = parts[1]
+            reward = redeem_code(user_id, code)
+            if reward:
+                await message.reply(f"🟢 | You redeemed `{code}` and received {reward} coins!")
+            else:
+                await message.reply("🔴 | This code is either invalid or has been already used!")
         
         # !pay command
         if message.content.startswith("!transfer"):
@@ -526,7 +505,20 @@ if message.content.startswith("!redeem"):
                 update_balance(user_id, -bet)
                 await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
         
-
+        # !leaderboard command
+        if message.content.startswith(("!leaderboard", "!lb")):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            leaderboard = get_server_leaderboard(message.guild)
+            if not leaderboard:
+                await message.reply("❌ | No users found in this server!")
+                return
+            await message.reply("**🏆 Server Leaderboard**\n" + 
+                "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
 
 
 
