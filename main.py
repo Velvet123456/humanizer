@@ -528,7 +528,7 @@ if message.content.startswith(("!coinflip", "!cf")):  # Adding the missing 'if' 
 
         
         # !leaderboard command
-        elif message.content.startswith(("!leaderboard", "!lb")):
+        if message.content.startswith(("!leaderboard", "!lb")):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
