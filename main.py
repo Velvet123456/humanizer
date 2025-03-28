@@ -119,19 +119,21 @@ def get_server_leaderboard(guild):
 
 
 
-def get_overall_leaderboard():
-    ref = db.reference("users")
-    users = ref.get() or {}
-    filtered_users = {
-        uid: data for uid, data in users.items() 
-        if uid not in BLACKLISTED_IDS and "balance" in data
-    }
+def get_overall_leaderboard(client):
+    users_ref = db.reference("users")
+    users_data = users_ref.get() or {}
+
     leaderboard = sorted(
-        filtered_users.items(),
-        key=lambda x: int(x[1].get("balance", 0)),
-        reverse=True
-    )[:5]
+        [
+            (client.get_user(int(user_id)).name, data.get("balance", 0))
+            for user_id, data in users_data.items()
+            if client.get_user(int(user_id))  # Ensures the user exists
+        ],
+        key=lambda x: x[1], reverse=True
+    )[:5]  # Only top 5 users
+
     return leaderboard
+
 
 
 
