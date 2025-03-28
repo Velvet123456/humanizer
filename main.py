@@ -122,13 +122,17 @@ def get_server_leaderboard(guild):
 def get_overall_leaderboard():
     ref = db.reference("users")
     users = ref.get() or {}
-    filtered_users = {uid: data for uid, data in users.items() if uid not in BLACKLISTED_IDS}
+    filtered_users = {
+        uid: data for uid, data in users.items() 
+        if uid not in BLACKLISTED_IDS and "balance" in data
+    }
     leaderboard = sorted(
         filtered_users.items(),
         key=lambda x: int(x[1].get("balance", 0)),
         reverse=True
     )[:5]
     return leaderboard
+
 
 
 def get_xp(user_id):
