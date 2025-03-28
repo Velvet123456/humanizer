@@ -477,50 +477,55 @@ class SelfBot(discord.Client):
             xp_message = update_xp(user_id, 6)
             await message.reply(result)
         
-elif message.content.startswith(("!coinflip", "!cf")):
-                if message.guild is None:
-                    await message.reply("❌ | This command can only be used in a server!")
-                    return
-                if is_banned(message.author.id):
-                    await message.reply("❌ | You are **banned** from using this bot.")
-                    return
-                user_ref = db.reference(f"users/{user_id}")
-                user_data = user_ref.get() or {}
-                loan_deadline = user_data.get("loan_deadline", 0)
-                current_loan = user_data.get("loan", 0)
-                loan_paid = user_data.get("loan_paid", 0)
-                lucky = user_data.get("lucky", False)
+if message.content.startswith(("!coinflip", "!cf")):  # Adding the missing 'if' statement
+    if message.guild is None:
+        await message.reply("❌ | This command can only be used in a server!")
+        return
+    if is_banned(message.author.id):
+        await message.reply("❌ | You are **banned** from using this bot.")
+        return
+    user_ref = db.reference(f"users/{message.author.id}")
+    user_data = user_ref.get() or {}
+    loan_deadline = user_data.get("loan_deadline", 0)
+    current_loan = user_data.get("loan", 0)
+    loan_paid = user_data.get("loan_paid", 0)
+    lucky = user_data.get("lucky", False)
 
-                if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-                    await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
-                    return
-                parts = message.content.split()
-                if len(parts) < 3:
-                    await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
-                    return
-                choice = parts[2].lower()
-                if choice not in ["heads", "tails"]:
-                    await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
-                    return
-                balance = get_balance(user_id)
-                if parts[1].lower() == "all":
-                    bet = balance
-                elif parts[1].isdigit():
-                    bet = int(parts[1])
-                else:
-                    await message.reply("Invalid bet amount!")
-                    return
-                if bet > balance or bet <= 0:
-                    await message.reply("You don't have enough coins!")
-                    return
+    if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+        await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
+        return
 
-                result = choice if lucky else random.choice(["heads", "tails"])  # Lucky users always win
-                if result == choice:
-                    update_balance(user_id, bet)
-                    await message.reply(f"✅ The coin landed on **{result}**! You won {bet} coins! New balance: {get_balance(user_id)} coins.")
-                else:
-                    update_balance(user_id, -bet)
-                    await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
+    parts = message.content.split()
+    if len(parts) < 3:
+        await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
+        return
+
+    choice = parts[2].lower()
+    if choice not in ["heads", "tails"]:
+        await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
+        return
+
+    balance = get_balance(message.author.id)
+    if parts[1].lower() == "all":
+        bet = balance
+    elif parts[1].isdigit():
+        bet = int(parts[1])
+    else:
+        await message.reply("Invalid bet amount!")
+        return
+
+    if bet > balance or bet <= 0:
+        await message.reply("You don't have enough coins!")
+        return
+
+    result = choice if lucky else random.choice(["heads", "tails"])  # Lucky users always win
+    if result == choice:
+        update_balance(message.author.id, bet)
+        await message.reply(f"✅ The coin landed on **{result}**! You won {bet} coins! New balance: {get_balance(message.author.id)} coins.")
+    else:
+        update_balance(message.author.id, -bet)
+        await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(message.author.id)} coins.")
+
         
         # !leaderboard command
         elif message.content.startswith(("!leaderboard", "!lb")):
