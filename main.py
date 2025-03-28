@@ -434,7 +434,7 @@ class SelfBot(discord.Client):
             result = rob_user(user_id, str(message.mentions[0].id))
             await message.reply(result)
 
-        if message.content.startswith(("!leaderboard", "!lb")):
+if message.content.startswith(("!leaderboard", "!lb")):
     if message.guild is None:
         await message.reply("❌ This command can only be used in a server!")
         return
@@ -447,6 +447,7 @@ class SelfBot(discord.Client):
         return
     await message.reply("**🏆 Leaderboard**\n" +
         "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
+
         
         # !redeem command
         if message.content.startswith("!redeem"):
