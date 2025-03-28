@@ -187,7 +187,6 @@ class SelfBot(discord.Client):
             current_loan = user_data.get("loan", 0)
             loan_paid = user_data.get("loan_paid", 0)
             lucky = user_data.get("lucky", False)
-
             # Check if user is lucky
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
                 await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
@@ -200,7 +199,6 @@ class SelfBot(discord.Client):
             if bet > balance or bet <= 0:
                 await message.reply("Invalid Bet Amount!")
                 return
-
             # Slot machine emojis
             emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
             roll = random.random()
@@ -221,7 +219,7 @@ class SelfBot(discord.Client):
                 update_balance(user_id, -bet)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
 
-        if message.content.startswith("!lottery"):
+        elif message.content.startswith("!lottery"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
@@ -243,7 +241,7 @@ class SelfBot(discord.Client):
                 new_balance = get_balance(user_id)
                 await message.reply(f"Buying a lottery ticket...\nScratching the ticket...\nUnfortunately, you didn't win anything. (Balance: {new_balance})")
 
-        if message.content.startswith("!help"):
+        elif message.content.startswith("!help"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
                 return
@@ -266,7 +264,7 @@ class SelfBot(discord.Client):
             )
 
         # !profile command
-        if message.content.startswith("!profile"):
+        elif message.content.startswith("!profile"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
@@ -289,7 +287,7 @@ class SelfBot(discord.Client):
             await message.reply(profile_msg)
 
         # !work command
-        if message.content.startswith("!work"):
+        elif message.content.startswith("!work"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
@@ -329,7 +327,7 @@ class SelfBot(discord.Client):
             await message.reply(response)
 
         # !daily command
-        if message.content.startswith("!daily"):
+        elif message.content.startswith("!daily"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
@@ -345,7 +343,7 @@ class SelfBot(discord.Client):
                 await message.reply(f"👴 | Claimed your daily 500 coins! {xp_message if xp_message else ''}")
 
         # !loan command
-        if message.content.startswith("!loan"):
+        elif message.content.startswith("!loan"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
@@ -379,7 +377,7 @@ class SelfBot(discord.Client):
             await message.reply(f"✅ You have borrowed {amount} coins. You need to repay {total_repay} coins within 24 hours or you'll be blocked from some commands.")
 
         # !payloan command
-        if message.content.startswith("!payloan"):
+        elif message.content.startswith("!payloan"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
@@ -424,7 +422,7 @@ class SelfBot(discord.Client):
                 await message.reply(f"✅ Paid {loan_paid}/{current_loan}$, Time Left: {hours}h {minutes}m.")
         
         # !rob command
-        if message.content.startswith("!rob"):
+        elif message.content.startswith("!rob"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
@@ -447,7 +445,7 @@ class SelfBot(discord.Client):
             await message.reply(result)
         
         # !redeem command
-        if message.content.startswith("!redeem"):
+        elif message.content.startswith("!redeem"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
@@ -465,7 +463,7 @@ class SelfBot(discord.Client):
                 await message.reply("🔴 | This code is either invalid or has been already used!")
         
         # !pay command
-        if message.content.startswith("!transfer"):
+        elif message.content.startswith("!transfer"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
                 return
@@ -479,7 +477,7 @@ class SelfBot(discord.Client):
             xp_message = update_xp(user_id, 6)
             await message.reply(result)
         
-if message.content.startswith(("!coinflip", "!cf")):
+elif message.content.startswith(("!coinflip", "!cf")):
     if message.guild is None:
         await message.reply("❌ | This command can only be used in a server!")
         return
@@ -524,7 +522,7 @@ if message.content.startswith(("!coinflip", "!cf")):
         await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
         
         # !leaderboard command
-        if message.content.startswith(("!leaderboard", "!lb")):
+        elif message.content.startswith(("!leaderboard", "!lb")):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
