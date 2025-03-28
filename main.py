@@ -433,6 +433,20 @@ class SelfBot(discord.Client):
                 return
             result = rob_user(user_id, str(message.mentions[0].id))
             await message.reply(result)
+
+        if message.content.startswith(("!leaderboard", "!lb")):
+    if message.guild is None:
+        await message.reply("❌ This command can only be used in a server!")
+        return
+    if is_banned(message.author.id):
+        await message.reply("❌ | You are **banned** from using this bot.")
+        return
+    leaderboard = get_overall_leaderboard(self)
+    if not leaderboard:
+        await message.reply("❌ | No users found in this server!")
+        return
+    await message.reply("**🏆 Leaderboard**\n" +
+        "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
         
         # !redeem command
         if message.content.startswith("!redeem"):
@@ -510,19 +524,6 @@ class SelfBot(discord.Client):
                 update_balance(user_id, -bet)
                 await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
         
-if message.content.startswith(("!leaderboard", "!lb")):
-    if message.guild is None:
-        await message.reply("❌ This command can only be used in a server!")
-        return
-    if is_banned(message.author.id):
-        await message.reply("❌ | You are **banned** from using this bot.")
-        return
-    leaderboard = get_overall_leaderboard(self)
-    if not leaderboard:
-        await message.reply("❌ | No users found in this server!")
-        return
-    await message.reply("**🏆 Leaderboard**\n" +
-        "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
 
 
 
