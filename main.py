@@ -449,23 +449,23 @@ if message.content.startswith(("!leaderboard", "!lb")):
         "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
 
         
-        # !redeem command
-        if message.content.startswith("!redeem"):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.")
-                return
-            if len(parts) < 2:
-                await message.reply("Use `!redeem <code>`")
-                return
-            code = parts[1]
-            reward = redeem_code(user_id, code)
-            if reward:
-                await message.reply(f"🟢 | You redeemed `{code}` and received {reward} coins!")
-            else:
-                await message.reply("🔴 | This code is either invalid or has been already used!")
+if message.content.startswith("!redeem"):
+    if message.guild is None:
+        await message.reply("❌ This command can only be used in a server!")
+        return
+    if is_banned(message.author.id):
+        await message.reply("❌ | You are **banned** from using this bot.")
+        return
+    if len(parts) < 2:
+        await message.reply("Use `!redeem <code>`")
+        return
+    code = parts[1]
+    reward = redeem_code(user_id, code)
+    if reward:
+        await message.reply(f"🟢 | You redeemed `{code}` and received {reward} coins!")
+    else:
+        await message.reply("🔴 | This code is either invalid or has been already used!")
+
         
         # !pay command
         if message.content.startswith("!transfer"):
