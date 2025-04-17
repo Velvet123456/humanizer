@@ -170,16 +170,13 @@ class SelfBot(discord.Client):
     async def on_ready(self):
         print(f"Logged in as {self.user}")
         
-    async def on_message(self, message):
+async def on_message(self, message):
         # Ignore messages from bots
         if message.author.bot:
             return
         
         user_id = str(message.author.id)
         parts = message.content.lower().split()
-
-import random
-import time
 
 if message.content.startswith("!gamble"):
     if message.guild is None:
