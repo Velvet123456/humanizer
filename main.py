@@ -178,83 +178,102 @@ class SelfBot(discord.Client):
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
-    if message.content.startswith("!gamble"):
-        print("!gamble command received")  # Debug: Check if !gamble command is recognized
-        if message.guild is None:
-            await message.reply("❌ This command can only be used in a server!")
-            return
+        if message.content.startswith("!gamble"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
 
-        if is_banned(message.author.id):
-            await message.reply("❌ | You are **banned** from using this bot.")
-            return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
 
-        user_id = str(message.author.id)
-        print(f"User ID: {user_id}")  # Debug: Print user ID to check if it's correct
-        user_ref = db.reference(f"users/{user_id}")
-        user_data = user_ref.get() or {}
-        loan_deadline = user_data.get("loan_deadline", 0)
-        current_loan = user_data.get("loan", 0)
-        loan_paid = user_data.get("loan_paid", 0)
+            user_id = str(message.author.id)
+            lucky_users = ["123456789012345678", "987654321098765432"]  # PUT USER IDs HERE
 
-        if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-            await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
-            return
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            loan_deadline = user_data.get("loan_deadline", 0)
+            current_loan = user_data.get("loan", 0)
+            loan_paid = user_data.get("loan_paid", 0)
 
-        parts = message.content.lower().split()
-        if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
-            await message.reply("Use !gamble <amount/all>")
-            return
+            if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
+                return
 
-        balance = get_balance(user_id)
-        bet = balance if parts[1].lower() == "all" else int(parts[1])
-        if bet > balance or bet <= 0:
-            await message.reply("Invalid Bet Amount!")
-            return
+            if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
+                await message.reply("Use !gamble <amount/all>")
+                return
 
-        emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
+            balance = get_balance(user_id)
+            if balance <= 0:
+                await message.reply("You don't have any money to gamble.")
+                return
 
-        # Check if the user is lucky
-        lucky_users = {909446748613779486}  # Example user IDs for lucky users
-        is_lucky = user_id in lucky_users
+            if parts[1].lower() == "all":
+                bet = balance
+            else:
+                try:
+                    bet = int(parts[1])
+                except ValueError:
+                    await message.reply("Invalid amount format.")
+                    return
 
-        print(f"User is lucky: {is_lucky}")  # Debug: Check if the user is lucky
+            if bet <= 0 or bet > balance:
+                await message.reply("Invalid Bet Amount!")
+                return
 
-        roll = random.random()
-        if is_lucky:
-            # Lucky users always win (either 3x or 2x)
-            winnings = bet * random.choice([2, 3])
-            update_balance(user_id, winnings)
-            slot_result = [random.choice(emojis) for _ in range(3)]
-            await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **{winnings}** (Balance: {get_balance(user_id)})")
-        else:
-            # Normal gambling process for non-lucky users
-            if roll <= 0.10:  # 10% chance for 3x win
+            emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
+
+            if user_id in lucky_users:
+                outcome = random.choice(["2x", "3x"])
                 chosen = random.choice(emojis)
-                slot_result = [chosen, chosen, chosen]
-                winnings = bet * 3
-                update_balance(user_id, winnings)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
-            elif roll <= 0.40:  # 30% chance for 2x win
-                chosen = random.choice(emojis)
-                others = [e for e in emojis if e != chosen]
-                third = random.choice(others)
-                position = random.randint(0, 2)
-                slot_result = [chosen, chosen, chosen]
-                slot_result[position] = third
-                winnings = bet * 2
-                update_balance(user_id, winnings)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
-            else:  # 60% chance to lose
-                while True:
-                    slot_result = [random.choice(emojis) for _ in range(3)]
-                    if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
-                        slot_result[0] == slot_result[1] != slot_result[2] or
-                        slot_result[0] == slot_result[2] != slot_result[1] or
-                        slot_result[1] == slot_result[2] != slot_result[0]
-                    ):
-                        break
-                update_balance(user_id, -bet)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+
+                if outcome == "3x":
+                    slot_result = [chosen, chosen, chosen]
+                    winnings = bet * 3
+                    update_balance(user_id, winnings)
+                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{winnings}** (Balance: {get_balance(user_id)})")
+                else:
+                    others = [e for e in emojis if e != chosen]
+                    third = random.choice(others)
+                    pos = random.randint(0, 2)
+                    slot_result = [chosen, chosen, chosen]
+                    slot_result[pos] = third
+                    winnings = bet * 2
+                    update_balance(user_id, winnings)
+                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
+            else:
+                roll = random.random()
+                if roll <= 0.10:  # 10% chance for 3x win
+                    chosen = random.choice(emojis)
+                    slot_result = [chosen, chosen, chosen]
+                    winnings = bet * 3
+                    update_balance(user_id, winnings)
+                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
+
+                elif roll <= 0.40:  # 30% chance for 2x win
+                    chosen = random.choice(emojis)
+                    others = [e for e in emojis if e != chosen]
+                    third = random.choice(others)
+                    pos = random.randint(0, 2)
+                    slot_result = [chosen, chosen, chosen]
+                    slot_result[pos] = third
+                    winnings = bet * 2
+                    update_balance(user_id, winnings)
+                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
+
+                else:  # 60% chance to lose
+                    while True:
+                        slot_result = [random.choice(emojis) for _ in range(3)]
+                        if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
+                            slot_result[0] == slot_result[1] != slot_result[2] or
+                            slot_result[0] == slot_result[2] != slot_result[1] or
+                            slot_result[1] == slot_result[2] != slot_result[0]
+                        ):
+                            break
+                    update_balance(user_id, -bet)
+                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+
 
 
         if message.content.startswith("!help"):
