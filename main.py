@@ -171,7 +171,7 @@ class SelfBot(discord.Client):
         print(f"Logged in as {self.user}")
         
     async def on_message(self, message):
-        # Ignore messages from bots
+       
         if message.author.bot:
             return
 
@@ -188,7 +188,7 @@ class SelfBot(discord.Client):
                 return
 
             user_id = str(message.author.id)
-            lucky_users = ["123456789012345678", "987654321098765432"]  # PUT USER IDs HERE
+            lucky_users = ["909446748613779486"]
 
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
