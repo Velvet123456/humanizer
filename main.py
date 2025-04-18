@@ -115,7 +115,7 @@ def get_server_leaderboard(guild):
         [(m.name, get_balance(str(m.id)) or 0) for m in guild.members if not m.bot and str(m.id) not in BLACKLISTED_IDS],
         key=lambda x: x[1], reverse=True
     )[:5]
-    return leaderboard
+   return leaderboard
 
 
 def get_global_leaderboard():
@@ -170,7 +170,7 @@ class SelfBot(discord.Client):
     async def on_ready(self):
         print(f"Logged in as {self.user}")
         
-async def on_message(self, message):
+    async def on_message(self, message):
         # Ignore messages from bots
         if message.author.bot:
             return
@@ -178,9 +178,9 @@ async def on_message(self, message):
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
-        if message.content.startswith("!gamble"):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
+    if message.content.startswith("!gamble"):
+        if message.guild is None:
+            await message.reply("❌ This command can only be used in a server!")
                 return
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.")
@@ -246,17 +246,17 @@ async def on_message(self, message):
                 return
             await message.reply(
                 "**Commands:**\n"
-                "`!profile [@user]` - Check profile\n"
-                "`!work` - Just Work.\n"
-                "`!daily` - Claim daily rewards.\n"
-                "`!gamble <amount/all>` - Gamble coins.\n"
-                "`!coinflip <amount> <heads/tails>` - Coinflip.\n"
-                "`!loan <amount>` - Take loan from the bank.\n"
-                "`!payloan <amount>` - Pay back the loan amount taken.\n"
-                "`!redeem <code>` - Redeem a code.\n"
-                "`!rob @user` - Steal coins from others.\n"
-                "`!transfer @user <amount>` - Transfer coins to someone.\n"
-                "`!leaderboard` - Check The Server Leaderboard.\n"
+                "!profile [@user] - Check profile\n"
+                "!work - Just Work.\n"
+                "!daily - Claim daily rewards.\n"
+                "!gamble <amount/all> - Gamble coins.\n"
+                "!coinflip <amount> <heads/tails> - Coinflip.\n"
+                "!loan <amount> - Take loan from the bank.\n"
+                "!payloan <amount> - Pay back the loan amount taken.\n"
+                "!redeem <code> - Redeem a code.\n"
+                "!rob @user - Steal coins from others.\n"
+                "!transfer @user <amount> - Transfer coins to someone.\n"
+                "!leaderboard - Check The Server Leaderboard.\n"
             )
         
         # !profile command
@@ -349,7 +349,7 @@ async def on_message(self, message):
                 return
             args = message.content.split()
             if len(args) < 2 or not args[1].isdigit():
-                await message.reply("❌ Usage: `!loan <amount>`")
+                await message.reply("❌ Usage: !loan <amount>")
                 return
             amount = int(args[1])
             if amount <= 0 or amount > 2000:
@@ -383,7 +383,7 @@ async def on_message(self, message):
                 return
             args = message.content.split()
             if len(args) < 2 or not args[1].isdigit():
-                await message.reply("❌ Usage: `!payloan <amount>`")
+                await message.reply("❌ Usage: !payloan <amount>")
                 return
             amount = int(args[1])
             user_ref = db.reference(f"users/{user_id}")
@@ -436,7 +436,7 @@ async def on_message(self, message):
                 await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
                 return
             if not message.mentions or str(message.mentions[0].id) == user_id:
-                await message.reply("Use `!rob @user`")
+                await message.reply("Use !rob @user")
                 return
             result = rob_user(user_id, str(message.mentions[0].id))
             await message.reply(result)
@@ -450,12 +450,12 @@ async def on_message(self, message):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
             if len(parts) < 2:
-                await message.reply("Use `!redeem <code>`")
+                await message.reply("Use !redeem <code>")
                 return
             code = parts[1]
             reward = redeem_code(user_id, code)
             if reward:
-                await message.reply(f"🟢 | You redeemed `{code}` and received {reward} coins!")
+                await message.reply(f"🟢 | You redeemed {code} and received {reward} coins!")
             else:
                 await message.reply("🔴 | This code is either invalid or has been already used!")
         
@@ -468,7 +468,7 @@ async def on_message(self, message):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
             if len(parts) < 3 or not message.mentions or not parts[2].isdigit():
-                await message.reply("Use `!pay @user <amount>`")
+                await message.reply("Use !pay @user <amount>")
                 return
             result = pay_user(user_id, str(message.mentions[0].id), int(parts[2]))
             xp_message = update_xp(user_id, 6)
@@ -491,11 +491,11 @@ async def on_message(self, message):
                 await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
                 return
             if len(parts) < 3:
-                await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
+                await message.reply("Use !coinflip <amount/all> <heads/tails>")
                 return
             choice = parts[2].lower()
             if choice not in ["heads", "tails"]:
-                await message.reply("Use `!coinflip <amount/all> <heads/tails>`")
+                await message.reply("Use !coinflip <amount/all> <heads/tails>")
                 return
             balance = get_balance(user_id)
             if parts[1].lower() == "all":
