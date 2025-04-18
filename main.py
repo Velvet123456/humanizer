@@ -181,7 +181,8 @@ class SelfBot(discord.Client):
     if message.content.startswith("!gamble"):
         if message.guild is None:
             await message.reply("❌ This command can only be used in a server!")
-                return
+            return
+
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
