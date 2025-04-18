@@ -178,76 +178,62 @@ async def on_message(self, message):
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
-if message.content.startswith("!gamble"):
-    if message.guild is None:
-        await message.reply("❌ This command can only be used in a server!")
-        return
-    if is_banned(message.author.id):
-        await message.reply("❌ | You are **banned** from using this bot.")
-        return
+        if message.content.startswith("!gamble"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            loan_deadline = user_data.get("loan_deadline", 0)
+            current_loan = user_data.get("loan", 0)
+            loan_paid = user_data.get("loan_paid", 0)
+            if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
+                return
+            if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
+                await message.reply("Use !gamble <amount/all>")
+                return
+            balance = get_balance(user_id)
+            bet = balance if parts[1].lower() == "all" else int(parts[1])
+            if bet > balance or bet <= 0:
+                await message.reply("Invalid Bet Amount!")
+                return
 
-    user_ref = db.reference(f"users/{user_id}")
-    user_data = user_ref.get() or {}
-    loan_deadline = user_data.get("loan_deadline", 0)
-    current_loan = user_data.get("loan", 0)
-    loan_paid = user_data.get("loan_paid", 0)
+            # Slot machine emojis
+            emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
 
-    if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-        await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
-        return
-
-    if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
-        await message.reply("Use !gamble <amount/all>")
-        return
-    
-    balance = get_balance(user_id)
-    bet = balance if parts[1].lower() == "all" else int(parts[1])
-    
-    if bet > balance or bet <= 0:
-        await message.reply("Invalid Bet Amount!")
-        return
-
-    # Slot machine emojis
-    emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
-
-    # Function to check the result and payout
-    def check_result(slot_result, bet, user_id):
-        if len(set(slot_result)) == 1:  # All three fruits are the same (3x win)
-            return bet * 3
-        elif len(set(slot_result)) == 2:  # Two fruits are the same (2x win)
-            return bet * 2
-        else:  # No match (lose)
-            return -bet  # Lose the bet
-
-    # Try for 10 attempts to get the correct result
-    for _ in range(10):
-        roll = random.random()
-        
-        if roll <= 0.10:  # 10% chance for 3x win
-            chosen = random.choice(emojis)
-            slot_result = [chosen, chosen, chosen]
-            winnings = check_result(slot_result, bet, user_id)
-            if winnings != 0:
+            roll = random.random()
+            if roll <= 0.10:  # 10% chance for 3x win
+                chosen = random.choice(emojis)
+                slot_result = [chosen, chosen, chosen]
+                winnings = bet * 3
                 update_balance(user_id, winnings)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
-                break
-        elif roll <= 0.35:  # 25% chance for 2x win
-            chosen = random.choice(emojis)
-            slot_result = [chosen, chosen, random.choice(emojis)]
-            winnings = check_result(slot_result, bet, user_id)
-            if winnings != 0:
+            elif roll <= 0.40:  # 30% chance for 2x win
+                chosen = random.choice(emojis)
+                others = [e for e in emojis if e != chosen]
+                third = random.choice(others)
+                position = random.randint(0, 2)
+                slot_result = [chosen, chosen, chosen]
+                slot_result[position] = third
+                winnings = bet * 2
                 update_balance(user_id, winnings)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
-                break
-        else:  # 65% chance to lose
-            slot_result = [random.choice(emojis) for _ in range(3)]
-            winnings = check_result(slot_result, bet, user_id)
-            if winnings == 0:
-                update_balance(user_id, winnings)
+            else:  # 60% chance to lose
+                while True:
+                    slot_result = [random.choice(emojis) for _ in range(3)]
+                    # Ensure it's not a winning combo
+                    if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
+                        slot_result[0] == slot_result[1] != slot_result[2] or
+                        slot_result[0] == slot_result[2] != slot_result[1] or
+                        slot_result[1] == slot_result[2] != slot_result[0]
+                    ):
+                        break
+                update_balance(user_id, -bet)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
-                break
-
-
 
         
         if message.content.startswith("!help"):
