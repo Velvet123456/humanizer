@@ -4,3 +4,4 @@ discord.py-self==2.0.1
 Flask
 python-dotenv
 requests
+asyncio
