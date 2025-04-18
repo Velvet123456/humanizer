@@ -174,36 +174,39 @@ class SelfBot(discord.Client):
         # Ignore messages from bots
         if message.author.bot:
             return
-        
+
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
-    if message.content.startswith("!gamble"):
-        if message.guild is None:
-            await message.reply("❌ This command can only be used in a server!")
-            return
+        if message.content.startswith("!gamble"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
 
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
+
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
             loan_deadline = user_data.get("loan_deadline", 0)
             current_loan = user_data.get("loan", 0)
             loan_paid = user_data.get("loan_paid", 0)
+
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
                 await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
                 return
+
             if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
                 await message.reply("Use !gamble <amount/all>")
                 return
+
             balance = get_balance(user_id)
             bet = balance if parts[1].lower() == "all" else int(parts[1])
             if bet > balance or bet <= 0:
                 await message.reply("Invalid Bet Amount!")
                 return
 
-            # Slot machine emojis
             emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
 
             roll = random.random()
@@ -213,6 +216,7 @@ class SelfBot(discord.Client):
                 winnings = bet * 3
                 update_balance(user_id, winnings)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
+
             elif roll <= 0.40:  # 30% chance for 2x win
                 chosen = random.choice(emojis)
                 others = [e for e in emojis if e != chosen]
@@ -223,10 +227,10 @@ class SelfBot(discord.Client):
                 winnings = bet * 2
                 update_balance(user_id, winnings)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
+
             else:  # 60% chance to lose
                 while True:
                     slot_result = [random.choice(emojis) for _ in range(3)]
-                    # Ensure it's not a winning combo
                     if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
                         slot_result[0] == slot_result[1] != slot_result[2] or
                         slot_result[0] == slot_result[2] != slot_result[1] or
@@ -235,6 +239,7 @@ class SelfBot(discord.Client):
                         break
                 update_balance(user_id, -bet)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+
 
 
 
