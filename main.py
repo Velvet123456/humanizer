@@ -188,7 +188,7 @@ class SelfBot(discord.Client):
                 return
 
             user_id = str(message.author.id)
-            lucky_users = ["123456789012345678", "987654321098765432"]  # PUT USER IDs HERE
+            lucky_users = ["909446748613779486"]
 
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
@@ -244,14 +244,14 @@ class SelfBot(discord.Client):
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
             else:
                 roll = random.random()
-                if roll <= 0.10:  # 10% chance for 3x win
+                if roll <= 0.10: 
                     chosen = random.choice(emojis)
                     slot_result = [chosen, chosen, chosen]
                     winnings = bet * 3
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
 
-                elif roll <= 0.40:  # 30% chance for 2x win
+                elif roll <= 0.40: 
                     chosen = random.choice(emojis)
                     others = [e for e in emojis if e != chosen]
                     third = random.choice(others)
@@ -262,7 +262,7 @@ class SelfBot(discord.Client):
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
 
-                else:  # 60% chance to lose
+                else: 
                     while True:
                         slot_result = [random.choice(emojis) for _ in range(3)]
                         if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
