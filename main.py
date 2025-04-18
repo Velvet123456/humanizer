@@ -204,36 +204,57 @@ async def on_message(self, message):
 
             # Slot machine emojis
             emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
+            lucky = {417247681276467, 481488241}  # Lucky user IDs
 
-            roll = random.random()
-            if roll <= 0.10:  # 10% chance for 3x win
-                chosen = random.choice(emojis)
-                slot_result = [chosen, chosen, chosen]
+            def count_matches(slots):
+                from collections import Counter
+                counts = Counter(slots).values()
+                if 3 in counts:
+                    return "3x"
+                elif 2 in counts:
+                    return "2x"
+                else:
+                    return "0x"
+
+            while True:
+                is_lucky = user_id in lucky
+                roll = random.random() if not is_lucky else 0.05  # Lucky users always trigger 3x or 2x
+
+                if roll <= 0.10:
+                    chosen = random.choice(emojis)
+                    slot_result = [chosen, chosen, chosen]
+                    outcome = "3x"
+                elif roll <= 0.40:
+                    chosen = random.choice(emojis)
+                    others = [e for e in emojis if e != chosen]
+                    third = random.choice(others)
+                    pos = random.randint(0, 2)
+                    slot_result = [chosen, chosen, chosen]
+                    slot_result[pos] = third
+                    outcome = "2x"
+                else:
+                    slot_result = [random.choice(emojis) for _ in range(3)]
+                    outcome = count_matches(slot_result)
+                    if outcome == "0x" and is_lucky:
+                        continue  # Lucky users can't lose
+                    if outcome == "0x":
+                        break
+                    continue  # Retry to generate a true 0x
+
+                break
+
+            if outcome == "3x":
                 winnings = bet * 3
                 update_balance(user_id, winnings)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
-            elif roll <= 0.40:  # 30% chance for 2x win
-                chosen = random.choice(emojis)
-                others = [e for e in emojis if e != chosen]
-                third = random.choice(others)
-                position = random.randint(0, 2)
-                slot_result = [chosen, chosen, chosen]
-                slot_result[position] = third
+            elif outcome == "2x":
                 winnings = bet * 2
                 update_balance(user_id, winnings)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
-            else:  # 60% chance to lose
-                while True:
-                    slot_result = [random.choice(emojis) for _ in range(3)]
-                    # Ensure it's not a winning combo
-                    if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
-                        slot_result[0] == slot_result[1] != slot_result[2] or
-                        slot_result[0] == slot_result[2] != slot_result[1] or
-                        slot_result[1] == slot_result[2] != slot_result[0]
-                    ):
-                        break
+            else:
                 update_balance(user_id, -bet)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+
 
         
         if message.content.startswith("!help"):
