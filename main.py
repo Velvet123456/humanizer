@@ -178,8 +178,6 @@ class SelfBot(discord.Client):
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
-async def on_message(self, message):
-    print("on_message triggered")  # Debug: Check if on_message is called
     if message.content.startswith("!gamble"):
         print("!gamble command received")  # Debug: Check if !gamble command is recognized
         if message.guild is None:
