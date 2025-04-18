@@ -179,7 +179,9 @@ class SelfBot(discord.Client):
         parts = message.content.lower().split()
 
 async def on_message(self, message):
+    print("on_message triggered")  # Debug: Check if on_message is called
     if message.content.startswith("!gamble"):
+        print("!gamble command received")  # Debug: Check if !gamble command is recognized
         if message.guild is None:
             await message.reply("❌ This command can only be used in a server!")
             return
@@ -189,6 +191,7 @@ async def on_message(self, message):
             return
 
         user_id = str(message.author.id)
+        print(f"User ID: {user_id}")  # Debug: Print user ID to check if it's correct
         user_ref = db.reference(f"users/{user_id}")
         user_data = user_ref.get() or {}
         loan_deadline = user_data.get("loan_deadline", 0)
@@ -211,10 +214,12 @@ async def on_message(self, message):
             return
 
         emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
-        
-        
-        lucky_users = {909446748613779486}
+
+        # Check if the user is lucky
+        lucky_users = {909446748613779486}  # Example user IDs for lucky users
         is_lucky = user_id in lucky_users
+
+        print(f"User is lucky: {is_lucky}")  # Debug: Check if the user is lucky
 
         roll = random.random()
         if is_lucky:
@@ -252,10 +257,6 @@ async def on_message(self, message):
                         break
                 update_balance(user_id, -bet)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
-
-
-
-
 
 
         if message.content.startswith("!help"):
