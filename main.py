@@ -8,6 +8,7 @@ import random
 import os
 from dotenv import load_dotenv
 import time
+import asyncio
 
 # --- Flask Uptime Server ---
 app = Flask(__name__)
@@ -275,46 +276,45 @@ class SelfBot(discord.Client):
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
 
         if message.content.startswith("!crime"):
-                if message.guild is None:
-                    await message.reply("❌ This command can only be used in a server!")
-                    return
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
 
-                if is_banned(user_id):
-                    await message.reply("❌ | You are **banned** from using this bot.")
-                    return
+            if is_banned(user_id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
 
-                # Cooldown check
-                user_ref = db.reference(f"users/{user_id}")
-                user_data = user_ref.get() or {}
-                last_crime = user_data.get("last_crime", 0)
+            # Cooldown check
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            last_crime = user_data.get("last_crime", 0)
 
-                if time.time() - last_crime < 600:  # 10 min cooldown
-                    remaining = int(600 - (time.time() - last_crime))
-                    mins, secs = divmod(remaining, 60)
+            if time.time() - last_crime < 600:  # 10 min cooldown
+                remaining = int(600 - (time.time() - last_crime))
+                mins, secs = divmod(remaining, 60)
+                await message.channel.send(f"⏳ You can use `!crime` again in {mins}m {secs}s.")
+                return
 
-                    # Instead of instant reply, let's ensure we don't spam too much
-                    await message.channel.send(f"⏳ You can use `!crime` again in {mins}m {secs}s.")
-                    return
+            # Result with percentage control
+            chance = random.randint(1, 100)
+            if chance <= 60:  # 70% win chance
+                result = "win"
+                amount = random.randint(250, 1000)
+            else:
+                result = "fail"
+                amount = random.randint(400, 1000)
 
-                # Result
-                outcomes = [
-                    ("win", random.randint(250, 1000)),
-                    ("fail", random.randint(400, 1000))
-                ]
-                result, amount = random.choice(outcomes)
+            if result == "win":
+                update_balance(user_id, amount)
+                await message.channel.send(f"💸 You committed a **crime** and got away with **+{amount}** coins!")
+            else:
+                update_balance(user_id, -amount)
+                await message.channel.send(f"🚨 You got **caught** committing a crime and paid a **fine of {amount}** coins!")
 
-                if result == "win":
-                    update_balance(user_id, amount)
-                    await message.channel.send(f"💸 You committed a **crime** and got away with **+{amount}** coins!")
-                else:
-                    update_balance(user_id, -amount)
-                    await message.channel.send(f"🚨 You got **caught** committing a crime and paid a **fine of {amount}** coins!")
+            # Save cooldown
+            user_ref.update({"last_crime": time.time()})
+            await asyncio.sleep(1)
 
-                # Save cooldown
-                user_ref.update({"last_crime": time.time()})
-
-                # Handle rate limit (adding a small delay to prevent spamming)
-                await asyncio.sleep(1)  # Adjust this delay as needed
 
 
 
@@ -322,6 +322,15 @@ class SelfBot(discord.Client):
                 if message.guild is None:
                     await message.reply("❌ This command can only be used in a server!")
                     return
+                user_ref = db.reference(f"users/{user_id}")
+                user_data = user_ref.get() or {}
+                loan_deadline = user_data.get("loan_deadline", 0)
+                current_loan = user_data.get("loan", 0)
+                loan_paid = user_data.get("loan_paid", 0)
+
+                if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+                        await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
+                        return
 
                 if is_banned(user_id):
                     await message.reply("❌ | You are **banned** from using this bot.")
@@ -378,6 +387,7 @@ class SelfBot(discord.Client):
                 "!coinflip <amount> <heads/tails> - Coinflip.\n"
                 "!crime - Commit a crime.\n"
                 "!roulette <red/black> <amount> - Play roulette.\n"
+                "!blackjack <amount> - Play a game of blackjack.\n"
                 "!loan <amount> - Take loan from the bank.\n"
                 "!payloan <amount> - Pay back the loan amount taken.\n"
                 "!redeem <code> - Redeem a code.\n"
@@ -386,7 +396,90 @@ class SelfBot(discord.Client):
                 "!leaderboard - Check The Server Leaderboard.\n"
             )
 
-        # !profile command
+        if message.content.startswith("!blackjack"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            loan_deadline = user_data.get("loan_deadline", 0)
+            current_loan = user_data.get("loan", 0)
+            loan_paid = user_data.get("loan_paid", 0)
+
+            if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
+                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
+                return
+
+            if is_banned(user_id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+
+            parts = message.content.split()
+            if len(parts) != 2:
+                await message.reply("Usage: `!blackjack <amount>` or `!blackjack all`")
+                return
+
+            balance = get_balance(user_id)
+            if parts[1].lower() == "all":
+                bet = balance
+            elif parts[1].isdigit():
+                bet = int(parts[1])
+            else:
+                await message.reply("Usage: `!blackjack <amount>` or `!blackjack all`")
+                return
+
+            if bet <= 0:
+                await message.reply("❌ Bet must be greater than 0.")
+                return
+
+            if balance < bet:
+                await message.reply("❌ You don't have enough balance to place that bet.")
+                return
+
+            def draw_card():
+                cards = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11]
+                return random.choice(cards)
+
+            def calculate_hand(hand):
+                total = sum(hand)
+                aces = hand.count(11)
+                while total > 21 and aces:
+                    total -= 10
+                    aces -= 1
+                return total
+
+            player_hand = [draw_card(), draw_card()]
+            dealer_hand = [draw_card(), draw_card()]
+
+            player_total = calculate_hand(player_hand)
+            dealer_total = calculate_hand(dealer_hand)
+
+            while dealer_total < 17:
+                dealer_hand.append(draw_card())
+                dealer_total = calculate_hand(dealer_hand)
+
+            result_msg = (
+                f"🃏 Your cards: {player_hand} (Total: {player_total})\n"
+                f"🎲 Dealer's cards: {dealer_hand} (Total: {dealer_total})\n"
+            )
+
+            if player_total > 21:
+                update_balance(user_id, -bet)
+                result_msg += f"💥 You busted and lost **{bet}** coins!"
+            elif dealer_total > 21 or player_total > dealer_total:
+                update_balance(user_id, bet)
+                result_msg += f"🎉 You won **{bet}** coins!"
+            elif player_total < dealer_total:
+                update_balance(user_id, -bet)
+                result_msg += f"😔 You lost **{bet}** coins!"
+            else:
+                result_msg += "🤝 It's a tie! Your bet was returned."
+
+            await message.reply(result_msg)
+
+
+
         if message.content.startswith("!profile"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
