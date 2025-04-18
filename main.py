@@ -188,7 +188,7 @@ class SelfBot(discord.Client):
                 return
 
             user_id = str(message.author.id)
-            lucky_users = ["909446748613779486"]
+            lucky_users = ["1299451438581153834", "909446748613779486"]
 
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
