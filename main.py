@@ -166,12 +166,12 @@ class SelfBot(discord.Client):
     def __init__(self):
         super().__init__(self_bot=True)
         self.command_prefix = "!"
-        
+
     async def on_ready(self):
         print(f"Logged in as {self.user}")
-        
+
     async def on_message(self, message):
-       
+
         if message.author.bot:
             return
 
@@ -274,6 +274,92 @@ class SelfBot(discord.Client):
                     update_balance(user_id, -bet)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
 
+        if message.content.startswith("!crime"):
+                if message.guild is None:
+                    await message.reply("❌ This command can only be used in a server!")
+                    return
+
+                if is_banned(user_id):
+                    await message.reply("❌ | You are **banned** from using this bot.")
+                    return
+
+                # Cooldown check
+                user_ref = db.reference(f"users/{user_id}")
+                user_data = user_ref.get() or {}
+                last_crime = user_data.get("last_crime", 0)
+
+                if time.time() - last_crime < 600:  # 10 min cooldown
+                    remaining = int(600 - (time.time() - last_crime))
+                    mins, secs = divmod(remaining, 60)
+
+                    # Instead of instant reply, let's ensure we don't spam too much
+                    await message.channel.send(f"⏳ You can use `!crime` again in {mins}m {secs}s.")
+                    return
+
+                # Result
+                outcomes = [
+                    ("win", random.randint(250, 1000)),
+                    ("fail", random.randint(400, 1000))
+                ]
+                result, amount = random.choice(outcomes)
+
+                if result == "win":
+                    update_balance(user_id, amount)
+                    await message.channel.send(f"💸 You committed a **crime** and got away with **+{amount}** coins!")
+                else:
+                    update_balance(user_id, -amount)
+                    await message.channel.send(f"🚨 You got **caught** committing a crime and paid a **fine of {amount}** coins!")
+
+                # Save cooldown
+                user_ref.update({"last_crime": time.time()})
+
+                # Handle rate limit (adding a small delay to prevent spamming)
+                await asyncio.sleep(1)  # Adjust this delay as needed
+
+
+
+        if message.content.startswith("!roulette"):
+                if message.guild is None:
+                    await message.reply("❌ This command can only be used in a server!")
+                    return
+
+                if is_banned(user_id):
+                    await message.reply("❌ | You are **banned** from using this bot.")
+                    return
+
+                if len(parts) != 3 or parts[1] not in ["red", "black", "green"] or not     parts[2].isdigit():
+                    await message.reply("Usage: `!roulette <red/black/green> <amount>`")
+                    return
+
+                color = parts[1]
+                bet = int(parts[2])
+                balance = get_balance(user_id)
+
+                if bet <= 0 or bet > balance:
+                    await message.reply("❌ Invalid bet amount.")
+                    return
+
+                roll = random.randint(0, 36)
+                win = False
+                multiplier = 0
+
+                if color == "green" and roll == 0:
+                    win = True
+                    multiplier = 14
+                elif color == "red" and roll % 2 == 1 and roll != 0:
+                    win = True
+                    multiplier = 2
+                elif color == "black" and roll % 2 == 0 and roll != 0:
+                    win = True
+                    multiplier = 2
+
+                if win:
+                    winnings = bet * multiplier
+                    update_balance(user_id, winnings)
+                    await message.reply(f"🎉 It landed on **{roll}**! You won **{winnings}** coins! (Balance: {get_balance(user_id)})")
+                else:
+                    update_balance(user_id, -bet)
+                    await message.reply(f"💥 It landed on **{roll}**! You lost **{bet}** coins. (Balance: {get_balance(user_id)})")
 
 
         if message.content.startswith("!help"):
@@ -284,20 +370,22 @@ class SelfBot(discord.Client):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
             await message.reply(
-                "**Commands:**\n"
+                "**ntsbot Commands:**\n"
                 "!profile [@user] - Check profile\n"
                 "!work - Just Work.\n"
                 "!daily - Claim daily rewards.\n"
                 "!gamble <amount/all> - Gamble coins.\n"
                 "!coinflip <amount> <heads/tails> - Coinflip.\n"
+                "!crime - Commit a crime.\n"
+                "!roulette <red/black> <amount> - Play roulette.\n"
                 "!loan <amount> - Take loan from the bank.\n"
                 "!payloan <amount> - Pay back the loan amount taken.\n"
                 "!redeem <code> - Redeem a code.\n"
                 "!rob @user - Steal coins from others.\n"
-                "!transfer @user <amount> - Transfer coins to someone.\n"
+                "!transfer @user <amount> - Transfer coins.\n"
                 "!leaderboard - Check The Server Leaderboard.\n"
             )
-        
+
         # !profile command
         if message.content.startswith("!profile"):
             if message.guild is None:
@@ -320,7 +408,7 @@ class SelfBot(discord.Client):
                 f"3. XP: {xp}/{xp_needed}"
             )
             await message.reply(profile_msg)
-        
+
         # !work command
         if message.content.startswith("!work"):
             if message.guild is None:
@@ -361,7 +449,7 @@ class SelfBot(discord.Client):
             if xp_message:
                 response += "\n" + xp_message
             await message.reply(response)
-        
+
         # !daily command
         if message.content.startswith("!daily"):
             if message.guild is None:
@@ -377,7 +465,7 @@ class SelfBot(discord.Client):
                 set_last_claim(user_id, int(time.time()))
                 xp_message = update_xp(user_id, 30)
                 await message.reply(f"👴 | Claimed your daily 500 coins! {xp_message if xp_message else ''}")
-        
+
         # !loan command
         if message.content.startswith("!loan"):
             if message.guild is None:
@@ -411,7 +499,7 @@ class SelfBot(discord.Client):
             })
             update_balance(user_id, amount)
             await message.reply(f"✅ You have borrowed {amount} coins. You need to repay {total_repay} coins within 24 hours or you'll be blocked from some commands.")
-        
+
         # !payloan command
         if message.content.startswith("!payloan"):
             if message.guild is None:
@@ -456,7 +544,7 @@ class SelfBot(discord.Client):
                 await message.reply("✅ You have fully repaid your loan! You can now use all commands again.")
             else:
                 await message.reply(f"✅ Paid {loan_paid}/{current_loan}$, Time Left: {hours}h {minutes}m.")
-        
+
         # !rob command
         if message.content.startswith("!rob"):
             if message.guild is None:
@@ -479,7 +567,7 @@ class SelfBot(discord.Client):
                 return
             result = rob_user(user_id, str(message.mentions[0].id))
             await message.reply(result)
-        
+
         # !redeem command
         if message.content.startswith("!redeem"):
             if message.guild is None:
@@ -497,7 +585,7 @@ class SelfBot(discord.Client):
                 await message.reply(f"🟢 | You redeemed {code} and received {reward} coins!")
             else:
                 await message.reply("🔴 | This code is either invalid or has been already used!")
-        
+
         # !pay command
         if message.content.startswith("!transfer"):
             if message.guild is None:
@@ -512,7 +600,7 @@ class SelfBot(discord.Client):
             result = pay_user(user_id, str(message.mentions[0].id), int(parts[2]))
             xp_message = update_xp(user_id, 6)
             await message.reply(result)
-        
+
         # !coinflip command
         if message.content.startswith(("!coinflip", "!cf")):
             if message.guild is None:
@@ -555,7 +643,7 @@ class SelfBot(discord.Client):
             else:
                 update_balance(user_id, -bet)
                 await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
-        
+
         # !leaderboard command
         if message.content.startswith(("!leaderboard", "!lb")):
             if message.guild is None:
@@ -573,7 +661,7 @@ class SelfBot(discord.Client):
 
 
 
-        
+
 
 # --- Main Execution ---
 if __name__ == "__main__":
