@@ -186,6 +186,7 @@ async def on_message(self, message):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
 
+            user_id = str(message.author.id)
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
             loan_deadline = user_data.get("loan_deadline", 0)
