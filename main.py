@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import time
 import asyncio
 
-# --- Flask Uptime Server ---
+
 app = Flask(__name__)
 load_dotenv()
 
@@ -21,10 +21,10 @@ if not TOKEN:
 
 @app.route('/')
 def home():
-    return "Self-bot is running!"
+    return "ntsbot is successfully running! with no errors."
 
-# --- Firebase Setup ---
-BLACKLISTED_IDS = ["1317890350471319633", "909446748613779486","1354087903126487120"]
+
+BLACKLISTED_IDS = ["1317890350471319633","1336435007501373505", "909446748613779486","1354087903126487120","1102658971938074684","1035569235130322964","1324125878745038995","1209094834531606560",]
 
 cred = credentials.Certificate("rohackersz-firebase-adminsdk-fbsvc-ef11a7abad.json")
 firebase_admin.initialize_app(cred, {
@@ -37,7 +37,7 @@ def is_banned(user_id: int) -> bool:
     banned_users = ban_ref.get() or {}
     return str(user_id) in banned_users
 
-# --- Utility Functions ---
+
 def get_balance(user_id):
     ref = db.reference(f"users/{user_id}/balance")
     balance = ref.get()
@@ -61,6 +61,14 @@ def get_last_claim(user_id):
 
 def set_last_claim(user_id, timestamp):
     ref = db.reference(f"users/{user_id}/last_daily")
+    ref.set(timestamp)
+
+def get_last_weeklyclaim(user_id):
+    ref = db.reference(f"users/{user_id}/last_weekly")
+    return ref.get() or 0
+
+def set_last_weeklyclaim(user_id, timestamp):
+    ref = db.reference(f"users/{user_id}/last_weekly")
     ref.set(timestamp)
 
 def redeem_code(user_id, code):
@@ -120,17 +128,23 @@ def get_server_leaderboard(guild):
 
 
 def get_global_leaderboard():
-    ref = db.reference("users")
-    users = ref.get()
-    if not users:
+    users_ref = db.reference("users")
+    all_users = users_ref.get()
+
+    if not all_users:
         return []
-    filtered_users = {uid: data for uid, data in users.items() if uid not in BLACKLISTED_IDS}
-    leaderboard = sorted(
-        filtered_users.items(),
-        key=lambda x: x[1].get("balance", 0),
-        reverse=True
-    )[:5]
-    return leaderboard
+
+    leaderboard = []
+    for user_id, data in all_users.items():
+        if str(user_id) in BLACKLISTED_IDS:
+            continue
+        balance = data.get("balance", 0)
+        
+        leaderboard.append((f"<@{user_id}>", balance))
+
+    return sorted(leaderboard, key=lambda x: x[1], reverse=True)[:7]
+
+
 
 def get_xp(user_id):
     ref = db.reference(f"users/{user_id}/xp")
@@ -158,11 +172,10 @@ def update_xp(user_id, amount):
         new_level = current_level + 1
         db.reference(f"users/{user_id}/level").set(new_level)
         update_balance(user_id, new_level * 100)
-        return f"🎉 You leveled up to {new_level}! You received {new_level * 100} coins!"
+        return f"\n🎉 You leveled up to {new_level}! You received {new_level * 100} coins!"
     db.reference(f"users/{user_id}/xp").set(new_xp)
     return None
 
-# --- Self-Bot Class ---
 class SelfBot(discord.Client):
     def __init__(self):
         super().__init__(self_bot=True)
@@ -243,7 +256,7 @@ class SelfBot(discord.Client):
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
             else:
-               
+                
                 roll = random.random()
                 if roll <= 0.35:  
                     chosen = random.choice(emojis)
@@ -251,7 +264,7 @@ class SelfBot(discord.Client):
                     winnings = bet * 3
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{winnings}** (Balance: {get_balance(user_id)})")
-                elif roll <= 0.45:
+                elif roll <= 0.45: 
                     chosen = random.choice(emojis)
                     others = [e for e in emojis if e != chosen]
                     third = random.choice(others)
@@ -261,7 +274,7 @@ class SelfBot(discord.Client):
                     winnings = bet * 2
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
-                else:
+                else:  
                     while True:
                         slot_result = [random.choice(emojis) for _ in range(3)]
                         if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
@@ -303,13 +316,13 @@ class SelfBot(discord.Client):
                 await message.channel.send(f"⏳ You can use `!crime` again in {mins}m {secs}s.")
                 return
 
-            # Check Firebase for lucky status
+            
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
-            lucky = user_data.get("lucky", False)  # Firebase lucky check
+            lucky = user_data.get("lucky", False) 
 
             if lucky:
-                amount = random.randint(500, 1200)  # Lucky users get a higher range of rewards
+                amount = random.randint(500, 1200) 
                 update_balance(user_id, amount)
                 await message.channel.send(f"💸 You committed a **crime** and got away with **+{amount}** coins!")
             else:
@@ -359,21 +372,21 @@ class SelfBot(discord.Client):
                 await message.reply("❌ Invalid bet amount.")
                 return
 
-            # Check Firebase for lucky status
+            
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
-            lucky = user_data.get("lucky", False)  # This is where you check the lucky status
+            lucky = user_data.get("lucky", False) 
 
             if lucky:
-                # If lucky, always win with a multiplier of 2 or 14
+                
                 if color == "green":
-                    roll = 0  # Always land on green for lucky users
+                    roll = 0  
                     multiplier = 14
                 elif color == "red":
-                    roll = random.choice([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35])  # Random red number
+                    roll = random.choice([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35])  
                     multiplier = 2
                 elif color == "black":
-                    roll = random.choice([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36])  # Random black number
+                    roll = random.choice([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36])  
                     multiplier = 2
                 winnings = bet * multiplier
                 update_balance(user_id, winnings - bet)
@@ -381,7 +394,7 @@ class SelfBot(discord.Client):
                 await message.reply(f"🎉 It landed on **{roll}**! You won **{winnings}** coins! (Balance: {get_balance(user_id)})")
                 return
             else:
-                # Regular roulette logic
+                
                 roll = random.randint(0, 36)
                 win = False
                 multiplier = 0
@@ -420,6 +433,7 @@ class SelfBot(discord.Client):
                 "!profile [@user] - Check profile\n"
                 "!work - Just Work.\n"
                 "!daily - Claim daily rewards.\n"
+                "!weekly - Claim weekly rewards.\n"
                 "!gamble <amount/all> - Gamble coins.\n"
                 "!coinflip <amount> <heads/tails> - Coinflip.\n"
                 "!crime - Commit a crime.\n"
@@ -467,10 +481,10 @@ class SelfBot(discord.Client):
                     await message.reply("❌ You don't have enough balance to place that bet.")
                     return
 
-                # Check Firebase for lucky status
+                
                 user_ref = db.reference(f"users/{user_id}")
                 user_data = user_ref.get() or {}
-                lucky = user_data.get("lucky", False)  # This is where you check the lucky status
+                lucky = user_data.get("lucky", False)  
 
                 if lucky:
                     outcome = random.choice(["2x", "3x"])
@@ -478,7 +492,7 @@ class SelfBot(discord.Client):
                     winnings = bet * multiplier
                     update_balance(user_id, winnings - bet)
 
-                    # Disguised lucky message (Realistic results)
+                    
                     result_msg = (
                         f"🃏 Your cards: 10,11 (Total: **21**)\n"
                         f"🎲 Dealer's cards: 6,10 (Total: **16**)\n"
@@ -487,7 +501,7 @@ class SelfBot(discord.Client):
                     await message.reply(result_msg)
                     return
 
-                # Regular Blackjack game logic
+                
                 def draw_card():
                     cards = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11]
                     return random.choice(cards)
@@ -586,18 +600,18 @@ class SelfBot(discord.Client):
             jobs = [
                 "skid", "awp.gg developer", "grass toucher", "farmer", "stripper",
                 "discord e-girls server manager", "wave developer", "footballer", "sigma",
-                "dancer", "robber", "byfron developer"
+                "dancer", "robber", "byfron developer","officer","lawyer","begger","hyperion staff","robloxian","youtuber"
             ]
             job = random.choice(jobs)
-            earnings = random.randint(50, 200)
+            earnings = random.randint(100, 500)
             update_balance(user_id, earnings)
-            xp_message = update_xp(user_id, 6)
+            xp_message = update_xp(user_id, 10)
             response = f"You worked as a {job} and earned {earnings} coins! New balance: {get_balance(user_id)} coins."
             if xp_message:
                 response += "\n" + xp_message
             await message.reply(response)
 
-        # !daily command
+       
         if message.content.startswith("!daily"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -606,14 +620,29 @@ class SelfBot(discord.Client):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
             if int(time.time()) - get_last_claim(user_id) < 86400:
-                await message.reply("Already claimed today!")
+                await message.reply("Already claimed!")
             else:
                 update_balance(user_id, 500)
                 set_last_claim(user_id, int(time.time()))
                 xp_message = update_xp(user_id, 30)
                 await message.reply(f"👴 | Claimed your daily 500 coins! {xp_message if xp_message else ''}")
 
-        # !loan command
+        if message.content.startswith("!weekly"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            if int(time.time()) - get_last_weeklyclaim(user_id) < 604800:
+                await message.reply("Already claimed!")
+            else:
+                update_balance(user_id, 5000)
+                set_last_weeklyclaim(user_id, int(time.time()))
+                xp_message = update_xp(user_id, 150)
+                await message.reply(f"👴 | Claimed your weekly 5000 coins! {xp_message if xp_message else ''}")
+
+        
         if message.content.startswith("!loan"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -626,8 +655,8 @@ class SelfBot(discord.Client):
                 await message.reply("❌ Usage: !loan <amount>")
                 return
             amount = int(args[1])
-            if amount <= 0 or amount > 2000:
-                await message.reply("❌ You can only take a loan between 1 and 2000 coins!")
+            if amount <= 0 or amount > 5000:
+                await message.reply("❌ You can only take a loan between 1 and 5000 coins!")
                 return
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
@@ -638,7 +667,7 @@ class SelfBot(discord.Client):
             interest = int(amount * 0.10)
             total_repay = amount + interest
             xp_message = update_xp(user_id, 1)
-            deadline = int(time.time()) + 86400
+            deadline = int(time.time()) + 86400  
             user_ref.update({
                 "loan": total_repay,
                 "loan_deadline": deadline,
@@ -647,7 +676,7 @@ class SelfBot(discord.Client):
             update_balance(user_id, amount)
             await message.reply(f"✅ You have borrowed {amount} coins. You need to repay {total_repay} coins within 24 hours or you'll be blocked from some commands.")
 
-        # !payloan command
+        
         if message.content.startswith("!payloan"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -692,7 +721,7 @@ class SelfBot(discord.Client):
             else:
                 await message.reply(f"✅ Paid {loan_paid}/{current_loan}$, Time Left: {hours}h {minutes}m.")
 
-        # !rob command
+        
         if message.content.startswith("!rob"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -733,7 +762,7 @@ class SelfBot(discord.Client):
             else:
                 await message.reply("🔴 | This code is either invalid or has been already used!")
 
-
+       
         if message.content.startswith("!transfer"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
@@ -790,13 +819,13 @@ class SelfBot(discord.Client):
                 await message.reply("You don't have enough coins!")
                 return
 
-            # Check Firebase for lucky status
-            lucky = user_data.get("lucky", False)  # Check the lucky status from Firebase
+            
+            lucky = user_data.get("lucky", False)  
 
             if lucky:
-                result = choice  # Force win if the user is lucky
+                result = choice 
             else:
-                result = random.choice(["heads", "tails"])  # Regular coin flip
+                result = random.choice(["heads", "tails"])  
 
             if result == choice:
                 update_balance(user_id, bet)
@@ -836,15 +865,15 @@ class SelfBot(discord.Client):
                 await message.reply("❌ Invalid bet or number.")
                 return
 
-            # Check Firebase for lucky status
+            
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
-            lucky = user_data.get("lucky", False)  # This is where you check the lucky status
+            lucky = user_data.get("lucky", False) 
 
             if lucky:
-                roll = guess  # Guaranteed win for lucky users
+                roll = guess 
             else:
-                roll = random.randint(1, 6)  # Regular dice roll
+                roll = random.randint(1, 6)
 
             if roll == guess:
                 winnings = bet * 6
@@ -857,33 +886,30 @@ class SelfBot(discord.Client):
 
 
 
-
-
-
-        # !leaderboard command
         if message.content.startswith(("!leaderboard", "!lb")):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
-            leaderboard = get_server_leaderboard(message.guild)
+
+            leaderboard = get_global_leaderboard()
             if not leaderboard:
-                await message.reply("❌ | No users found in this server!")
+                await message.reply("❌ | No users found!")
                 return
-            await message.reply("**🏆 Server Leaderboard**\n" + 
-                "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
+
+            msg = "**🌐 Global Leaderboard (Top 7)**\n"
+            for i, (name, bal) in enumerate(leaderboard):
+                msg += f"{i+1}. {name} - {bal} coins\n"
+
+            await message.reply(msg)
 
 
 
 
 
-# --- Main Execution ---
 if __name__ == "__main__":
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask).start()
-    print("Flask server is running...")
+    print("Flask server is running.")
     client = SelfBot()
     client.run(TOKEN)
