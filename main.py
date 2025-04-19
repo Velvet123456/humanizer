@@ -189,13 +189,12 @@ class SelfBot(discord.Client):
                 return
 
             user_id = str(message.author.id)
-            lucky_users = ["1299451438581153834", "909446748613779486"]
-
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
             loan_deadline = user_data.get("loan_deadline", 0)
             current_loan = user_data.get("loan", 0)
             loan_paid = user_data.get("loan_paid", 0)
+            is_lucky = user_data.get("lucky", False)  # Check if user has lucky mode enabled
 
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
                 await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
@@ -225,10 +224,10 @@ class SelfBot(discord.Client):
 
             emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
 
-            if user_id in lucky_users:
+            if is_lucky:
+                # Lucky mode - guaranteed win (2x or 3x)
                 outcome = random.choice(["2x", "3x"])
                 chosen = random.choice(emojis)
-
                 if outcome == "3x":
                     slot_result = [chosen, chosen, chosen]
                     winnings = bet * 3
@@ -244,15 +243,15 @@ class SelfBot(discord.Client):
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
             else:
+                # Regular mode - random chance of winning
                 roll = random.random()
-                if roll <= 0.10: 
+                if roll <= 0.10:  # 10% chance to win 3x
                     chosen = random.choice(emojis)
                     slot_result = [chosen, chosen, chosen]
                     winnings = bet * 3
                     update_balance(user_id, winnings)
-                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x! +{winnings}** (Balance: {get_balance(user_id)})")
-
-                elif roll <= 0.40: 
+                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{winnings}** (Balance: {get_balance(user_id)})")
+                elif roll <= 0.40:  # 30% chance to win 2x
                     chosen = random.choice(emojis)
                     others = [e for e in emojis if e != chosen]
                     third = random.choice(others)
@@ -261,9 +260,8 @@ class SelfBot(discord.Client):
                     slot_result[pos] = third
                     winnings = bet * 2
                     update_balance(user_id, winnings)
-                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x! +{winnings}** (Balance: {get_balance(user_id)})")
-
-                else: 
+                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
+                else:  # 60% chance to lose
                     while True:
                         slot_result = [random.choice(emojis) for _ in range(3)]
                         if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
@@ -275,10 +273,14 @@ class SelfBot(discord.Client):
                     update_balance(user_id, -bet)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
 
+
+
         if message.content.startswith("!crime"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
+
+            user_id = message.author.id
 
             if is_banned(user_id):
                 await message.reply("❌ | You are **banned** from using this bot.")
@@ -295,18 +297,19 @@ class SelfBot(discord.Client):
                 await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
                 return
 
-            if time.time() - last_crime < 1:
-                remaining = int(1 - (time.time() - last_crime))
+            if time.time() - last_crime < 600:
+                remaining = int(600 - (time.time() - last_crime))
                 mins, secs = divmod(remaining, 60)
                 await message.channel.send(f"⏳ You can use `!crime` again in {mins}m {secs}s.")
                 return
 
-            # Lucky mode check
-            lucky_users = ["1299451438581153834", ""]
-            is_lucky = str(user_id) in lucky_users
+            # Check Firebase for lucky status
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            lucky = user_data.get("lucky", False)  # Firebase lucky check
 
-            if is_lucky:
-                amount = random.randint(500, 1200)
+            if lucky:
+                amount = random.randint(500, 1200)  # Lucky users get a higher range of rewards
                 update_balance(user_id, amount)
                 await message.channel.send(f"💸 You committed a **crime** and got away with **+{amount}** coins!")
             else:
@@ -324,43 +327,61 @@ class SelfBot(discord.Client):
 
 
 
+
             user_ref.update({"last_crime": time.time()})
             await asyncio.sleep(1)
 
-
-
-
-
         if message.content.startswith("!roulette"):
-                if message.guild is None:
-                    await message.reply("❌ This command can only be used in a server!")
-                    return
-                user_ref = db.reference(f"users/{user_id}")
-                user_data = user_ref.get() or {}
-                loan_deadline = user_data.get("loan_deadline", 0)
-                current_loan = user_data.get("loan", 0)
-                loan_paid = user_data.get("loan_paid", 0)
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
 
-                if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-                        await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
-                        return
+            user_id = message.author.id
 
-                if is_banned(user_id):
-                    await message.reply("❌ | You are **banned** from using this bot.")
-                    return
+            if is_banned(user_id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
 
-                if len(parts) != 3 or parts[1] not in ["red", "black", "green"] or not     parts[2].isdigit():
-                    await message.reply("Usage: `!roulette <red/black/green> <amount>`")
-                    return
+            parts = message.content.split()
+            if len(parts) != 3 or parts[1] not in ["red", "black", "green"] or (parts[2].lower() != "all" and not parts[2].isdigit()):
+                await message.reply("Usage: `!roulette <red/black/green> <amount>` or `!roulette <red/black/green> all`")
+                return
 
-                color = parts[1]
+            color = parts[1]
+            balance = get_balance(user_id)
+
+            if parts[2].lower() == "all":
+                bet = balance
+            else:
                 bet = int(parts[2])
-                balance = get_balance(user_id)
 
-                if bet <= 0 or bet > balance:
-                    await message.reply("❌ Invalid bet amount.")
-                    return
+            if bet <= 0 or bet > balance:
+                await message.reply("❌ Invalid bet amount.")
+                return
 
+            # Check Firebase for lucky status
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            lucky = user_data.get("lucky", False)  # This is where you check the lucky status
+
+            if lucky:
+                # If lucky, always win with a multiplier of 2 or 14
+                if color == "green":
+                    roll = 0  # Always land on green for lucky users
+                    multiplier = 14
+                elif color == "red":
+                    roll = random.choice([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35])  # Random red number
+                    multiplier = 2
+                elif color == "black":
+                    roll = random.choice([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36])  # Random black number
+                    multiplier = 2
+                winnings = bet * multiplier
+                update_balance(user_id, winnings - bet)
+
+                await message.reply(f"🎉 It landed on **{roll}**! You won **{winnings}** coins! (Balance: {get_balance(user_id)})")
+                return
+            else:
+                # Regular roulette logic
                 roll = random.randint(0, 36)
                 win = False
                 multiplier = 0
@@ -382,6 +403,9 @@ class SelfBot(discord.Client):
                 else:
                     update_balance(user_id, -bet)
                     await message.reply(f"💥 It landed on **{roll}**! You lost **{bet}** coins. (Balance: {get_balance(user_id)})")
+
+
+
 
 
         if message.content.startswith("!help"):
@@ -411,103 +435,100 @@ class SelfBot(discord.Client):
             )
 
         if message.content.startswith("!blackjack"):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
+                if message.guild is None:
+                    await message.reply("❌ This command can only be used in a server!")
+                    return
 
-            user_ref = db.reference(f"users/{user_id}")
-            user_data = user_ref.get() or {}
-            loan_deadline = user_data.get("loan_deadline", 0)
-            current_loan = user_data.get("loan", 0)
-            loan_paid = user_data.get("loan_paid", 0)
+                user_id = message.author.id
 
-            if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
-                await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
-                return
+                if is_banned(user_id):
+                    await message.reply("❌ | You are **banned** from using this bot.")
+                    return
 
-            if is_banned(user_id):
-                await message.reply("❌ | You are **banned** from using this bot.")
-                return
+                parts = message.content.split()
+                if len(parts) != 2:
+                    await message.reply("Usage: `!blackjack <amount>` or `!blackjack all`")
+                    return
 
-            parts = message.content.split()
-            if len(parts) != 2:
-                await message.reply("Usage: `!blackjack <amount>` or `!blackjack all`")
-                return
+                balance = get_balance(user_id)
+                if parts[1].lower() == "all":
+                    bet = balance
+                elif parts[1].isdigit():
+                    bet = int(parts[1])
+                else:
+                    await message.reply("Usage: `!blackjack <amount>` or `!blackjack all`")
+                    return
 
-            balance = get_balance(user_id)
-            if parts[1].lower() == "all":
-                bet = balance
-            elif parts[1].isdigit():
-                bet = int(parts[1])
-            else:
-                await message.reply("Usage: `!blackjack <amount>` or `!blackjack all`")
-                return
+                if bet <= 0:
+                    await message.reply("❌ Bet must be greater than 0.")
+                    return
 
-            if bet <= 0:
-                await message.reply("❌ Bet must be greater than 0.")
-                return
+                if balance < bet:
+                    await message.reply("❌ You don't have enough balance to place that bet.")
+                    return
 
-            if balance < bet:
-                await message.reply("❌ You don't have enough balance to place that bet.")
-                return
+                # Check Firebase for lucky status
+                user_ref = db.reference(f"users/{user_id}")
+                user_data = user_ref.get() or {}
+                lucky = user_data.get("lucky", False)  # This is where you check the lucky status
 
-            # LUCKY MODE
-            lucky_users = ["1299451438581153834", "909446748613779486"]  # Lucky users
-            if str(user_id) in lucky_users:
-                outcome = random.choice(["2x", "3x"])
-                multiplier = 2 if outcome == "2x" else 3
-                winnings = bet * multiplier
-                update_balance(user_id, winnings - bet)
+                if lucky:
+                    outcome = random.choice(["2x", "3x"])
+                    multiplier = 2 if outcome == "2x" else 3
+                    winnings = bet * multiplier
+                    update_balance(user_id, winnings - bet)
 
-                # Disguised lucky message (Realistic results)
-                result_msg = (
-                    f"🃏 Your cards: 10,11 (Total: **21**)\n"
-                    f"🎲 Dealer's cards: 6,10 (Total: **16**)\n"
-                    f"🎉You won **{winnings - bet}** coins"
-                )
-                await message.reply(result_msg)
-                return
+                    # Disguised lucky message (Realistic results)
+                    result_msg = (
+                        f"🃏 Your cards: 10,11 (Total: **21**)\n"
+                        f"🎲 Dealer's cards: 6,10 (Total: **16**)\n"
+                        f"🎉 You won **{winnings - bet}** coins!"
+                    )
+                    await message.reply(result_msg)
+                    return
 
-            def draw_card():
-                cards = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11]
-                return random.choice(cards)
+                # Regular Blackjack game logic
+                def draw_card():
+                    cards = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11]
+                    return random.choice(cards)
 
-            def calculate_hand(hand):
-                total = sum(hand)
-                aces = hand.count(11)
-                while total > 21 and aces:
-                    total -= 10
-                    aces -= 1
-                return total
+                def calculate_hand(hand):
+                    total = sum(hand)
+                    aces = hand.count(11)
+                    while total > 21 and aces:
+                        total -= 10
+                        aces -= 1
+                    return total
 
-            player_hand = [draw_card(), draw_card()]
-            dealer_hand = [draw_card(), draw_card()]
+                player_hand = [draw_card(), draw_card()]
+                dealer_hand = [draw_card(), draw_card()]
 
-            player_total = calculate_hand(player_hand)
-            dealer_total = calculate_hand(dealer_hand)
-
-            while dealer_total < 17:
-                dealer_hand.append(draw_card())
+                player_total = calculate_hand(player_hand)
                 dealer_total = calculate_hand(dealer_hand)
 
-            result_msg = (
-                f"🃏 Your cards: {player_hand} (Total: {player_total})\n"
-                f"🎲 Dealer's cards: {dealer_hand} (Total: {dealer_total})\n"
-            )
+                while dealer_total < 17:
+                    dealer_hand.append(draw_card())
+                    dealer_total = calculate_hand(dealer_hand)
 
-            if player_total > 21:
-                update_balance(user_id, -bet)
-                result_msg += f"💥 You busted and lost **{bet}** coins!"
-            elif dealer_total > 21 or player_total > dealer_total:
-                update_balance(user_id, bet)
-                result_msg += f"🎉 You won **{bet}** coins!"
-            elif player_total < dealer_total:
-                update_balance(user_id, -bet)
-                result_msg += f"😔 You lost **{bet}** coins!"
-            else:
-                result_msg += "🤝 It's a tie! Your bet was returned."
+                result_msg = (
+                    f"🃏 Your cards: {player_hand} (Total: {player_total})\n"
+                    f"🎲 Dealer's cards: {dealer_hand} (Total: {dealer_total})\n"
+                )
 
-            await message.reply(result_msg)
+                if player_total > 21:
+                    update_balance(user_id, -bet)
+                    result_msg += f"💥 You busted and lost **{bet}** coins!"
+                elif dealer_total > 21 or player_total > dealer_total:
+                    update_balance(user_id, bet)
+                    result_msg += f"🎉 You won **{bet}** coins!"
+                elif player_total < dealer_total:
+                    update_balance(user_id, -bet)
+                    result_msg += f"😔 You lost **{bet}** coins!"
+                else:
+                    result_msg += "🤝 It's a tie! Your bet was returned."
+
+                await message.reply(result_msg)
+
 
 
 
@@ -617,7 +638,7 @@ class SelfBot(discord.Client):
             interest = int(amount * 0.10)
             total_repay = amount + interest
             xp_message = update_xp(user_id, 1)
-            deadline = int(time.time()) + 86400  # 24 hours from now
+            deadline = int(time.time()) + 86400
             user_ref.update({
                 "loan": total_repay,
                 "loan_deadline": deadline,
@@ -694,7 +715,7 @@ class SelfBot(discord.Client):
             result = rob_user(user_id, str(message.mentions[0].id))
             await message.reply(result)
 
-        # !redeem command
+
         if message.content.startswith("!redeem"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -712,7 +733,7 @@ class SelfBot(discord.Client):
             else:
                 await message.reply("🔴 | This code is either invalid or has been already used!")
 
-        # !pay command
+
         if message.content.startswith("!transfer"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
@@ -721,13 +742,12 @@ class SelfBot(discord.Client):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
             if len(parts) < 3 or not message.mentions or not parts[2].isdigit():
-                await message.reply("Use !pay @user <amount>")
+                await message.reply("Use !transfer @user <amount>")
                 return
             result = pay_user(user_id, str(message.mentions[0].id), int(parts[2]))
             xp_message = update_xp(user_id, 6)
             await message.reply(result)
 
-        # !coinflip command
         if message.content.startswith(("!coinflip", "!cf")):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
@@ -735,21 +755,28 @@ class SelfBot(discord.Client):
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
+
+            user_id = message.author.id
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
             loan_deadline = user_data.get("loan_deadline", 0)
             current_loan = user_data.get("loan", 0)
             loan_paid = user_data.get("loan_paid", 0)
+
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
                 await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
                 return
+
+            parts = message.content.split()
             if len(parts) < 3:
-                await message.reply("Use !coinflip <amount/all> <heads/tails>")
+                await message.reply("Usage: !coinflip <amount/all> <heads/tails>")
                 return
+
             choice = parts[2].lower()
             if choice not in ["heads", "tails"]:
-                await message.reply("Use !coinflip <amount/all> <heads/tails>")
+                await message.reply("Usage: !coinflip <amount/all> <heads/tails>")
                 return
+
             balance = get_balance(user_id)
             if parts[1].lower() == "all":
                 bet = balance
@@ -758,68 +785,75 @@ class SelfBot(discord.Client):
             else:
                 await message.reply("Invalid bet amount!")
                 return
+
             if bet > balance or bet <= 0:
                 await message.reply("You don't have enough coins!")
                 return
 
-            lucky_users = ["1299451438581153834", "909446748613779486"]
-            is_lucky = str(user_id) in lucky_users
+            # Check Firebase for lucky status
+            lucky = user_data.get("lucky", False)  # Check the lucky status from Firebase
 
-            if is_lucky:
-                result = choice  # Force win
+            if lucky:
+                result = choice  # Force win if the user is lucky
             else:
-                result = random.choice(["heads", "tails"])
+                result = random.choice(["heads", "tails"])  # Regular coin flip
 
             if result == choice:
                 update_balance(user_id, bet)
                 xp_message = update_xp(user_id, 5)
-                await message.reply(f"✅ The coin landed on **{result}**! You won {bet} coins! New balance: {get_balance(user_id)} coins.")
+                await message.reply(f"✅ The coin landed on **{result}**! You won **{bet}** coins! New balance: {get_balance(user_id)} coins.")
             else:
                 update_balance(user_id, -bet)
-                await message.reply(f"❌ The coin landed on **{result}**! You lost {bet} coins! New balance: {get_balance(user_id)} coins.")
+                await message.reply(f"❌ The coin landed on **{result}**! You lost **{bet}** coins! New balance: {get_balance(user_id)} coins.")
+
 
 
         if message.content.startswith("!dice"):
-                if message.guild is None:
-                    await message.reply("❌ | This command can only be used in a server!")
-                    return
+            if message.guild is None:
+                await message.reply("❌ | This command can only be used in a server!")
+                return
 
-                user_id = message.author.id
+            user_id = message.author.id
 
-                if is_banned(user_id):
-                    await message.reply("❌ | You are **banned** from using this bot.")
-                    return
+            if is_banned(user_id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
 
-                parts = message.content.split()
-                if len(parts) != 3 or (not parts[1].isdigit() and parts[1].lower() != "all") or not parts[2].isdigit():
-                    await message.reply("Usage: `!dice <amount> <number 1-6>` or `!dice all <number 1-6>`")
-                    return
+            parts = message.content.split()
+            if len(parts) != 3 or (not parts[1].isdigit() and parts[1].lower() != "all") or not parts[2].isdigit():
+                await message.reply("Usage: `!dice <amount> <number 1-6>` or `!dice all <number 1-6>`")
+                return
 
-                balance = get_balance(user_id)
-                if parts[1].lower() == "all":
-                    bet = balance
-                else:
-                    bet = int(parts[1])
+            balance = get_balance(user_id)
+            if parts[1].lower() == "all":
+                bet = balance
+            else:
+                bet = int(parts[1])
 
-                guess = int(parts[2])
+            guess = int(parts[2])
 
-                if bet <= 0 or bet > balance or guess < 1 or guess > 6:
-                    await message.reply("❌ Invalid bet or number.")
-                    return
+            if bet <= 0 or bet > balance or guess < 1 or guess > 6:
+                await message.reply("❌ Invalid bet or number.")
+                return
 
-                lucky_users = ["1299451438581153834", "909446748613779486"]  # Add user IDs for lucky mode
-                if str(user_id) in lucky_users:
-                    roll = guess  # Guaranteed win for lucky users
-                else:
-                    roll = random.randint(1, 6)  # Regular dice roll
+            # Check Firebase for lucky status
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            lucky = user_data.get("lucky", False)  # This is where you check the lucky status
 
-                if roll == guess:
-                    winnings = bet * 6
-                    update_balance(user_id, winnings)
-                    await message.reply(f"🎲 The dice rolled **{roll}**! You guessed correctly and won **{winnings}** coins!")
-                else:
-                    update_balance(user_id, -bet)
-                    await message.reply(f"🎲 The dice rolled **{roll}**. You lost **{bet}** coins!")
+            if lucky:
+                roll = guess  # Guaranteed win for lucky users
+            else:
+                roll = random.randint(1, 6)  # Regular dice roll
+
+            if roll == guess:
+                winnings = bet * 6
+                update_balance(user_id, winnings)
+                await message.reply(f"🎲 The dice rolled **{roll}**! You guessed correctly and won **{winnings}** coins!")
+            else:
+                update_balance(user_id, -bet)
+                await message.reply(f"🎲 The dice rolled **{roll}**. You lost **{bet}** coins!")
+
 
 
 
