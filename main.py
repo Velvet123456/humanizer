@@ -225,7 +225,7 @@ class SelfBot(discord.Client):
             emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
 
             if is_lucky:
-                # Lucky mode - guaranteed win (2x or 3x)
+                
                 outcome = random.choice(["2x", "3x"])
                 chosen = random.choice(emojis)
                 if outcome == "3x":
@@ -243,15 +243,15 @@ class SelfBot(discord.Client):
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
             else:
-                # Regular mode - random chance of winning
+               
                 roll = random.random()
-                if roll <= 0.10:  # 10% chance to win 3x
+                if roll <= 0.35:  
                     chosen = random.choice(emojis)
                     slot_result = [chosen, chosen, chosen]
                     winnings = bet * 3
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{winnings}** (Balance: {get_balance(user_id)})")
-                elif roll <= 0.40:  # 30% chance to win 2x
+                elif roll <= 0.45:
                     chosen = random.choice(emojis)
                     others = [e for e in emojis if e != chosen]
                     third = random.choice(others)
@@ -261,7 +261,7 @@ class SelfBot(discord.Client):
                     winnings = bet * 2
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
-                else:  # 60% chance to lose
+                else:
                     while True:
                         slot_result = [random.choice(emojis) for _ in range(3)]
                         if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
