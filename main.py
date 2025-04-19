@@ -440,7 +440,7 @@ class SelfBot(discord.Client):
                 "8. !roulette <red/black> <amount> - Play roulette.\n"
                 "9. !blackjack <amount> - Play a game of blackjack.\n"
                 "10. !loan <amount> - Take loan from the bank.\n"
-                "11. !payloan <amount> - Pay back the loan amount taken.\n"
+                "11. !payloan <amount> - Pay back the loan amount.\n"
                 "12. !dice <amount> <number> - Roll dice for prize.\n"
                 "13. !redeem <code> - Redeem a code.\n"
                 "14. !rob @user - Steal coins from others.\n"
