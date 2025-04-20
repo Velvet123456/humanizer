@@ -119,12 +119,15 @@ def pay_user(sender_id, receiver_id, amount):
     update_balance(receiver_id, amount)
     return f"✅ You sent {amount} coins to <@{receiver_id}>!"
 
-def get_server_leaderboard(guild):
+async def get_server_leaderboard(guild):
     users_ref = db.reference("users")
     all_users = users_ref.get()
 
     if not all_users:
         return []
+
+    # Fetch all members to ensure we have the complete list
+    await guild.fetch_members()
 
     leaderboard = sorted(
         [(m.name, get_balance(str(m.id)) or 0) for m in guild.members if not m.bot and str(m.id) not in BLACKLISTED_IDS],
@@ -198,6 +201,24 @@ class SelfBot(discord.Client):
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
+        if message.content.startswith(("!leaderboard", "!lb")):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+
+            # Await the call to get_server_leaderboard
+            leaderboard = await get_server_leaderboard(message.guild)
+
+            if not leaderboard:
+                await message.reply("❌ | No users found in this server!")
+                return
+
+            await message.reply("**🏆 Server Leaderboard**\n" + 
+                "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
+
         if message.content.startswith("!gamble"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -264,7 +285,7 @@ class SelfBot(discord.Client):
             else:
 
                 roll = random.random()
-                if roll <= 0.30:  
+                if roll <= 0.35:  
                     chosen = random.choice(emojis)
                     slot_result = [chosen, chosen, chosen]
                     winnings = bet * 3
@@ -888,26 +909,6 @@ class SelfBot(discord.Client):
             else:
                 update_balance(user_id, -bet)
                 await message.reply(f"🎲 The dice rolled **{roll}**. You lost **{bet}** coins!")
-
-
-
-
-        if message.content.startswith(("!leaderboard", "!lb")):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.")
-                return
-            leaderboard = get_server_leaderboard(message.guild)
-            if not leaderboard:
-                await message.reply("❌ | No users found in this server!")
-                return
-            await message.reply("**🏆 Server Leaderboard**\n" + 
-                "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
-
-
-
 
 
 if __name__ == "__main__":
