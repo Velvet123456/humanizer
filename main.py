@@ -264,7 +264,7 @@ class SelfBot(discord.Client):
             else:
 
                 roll = random.random()
-                if roll <= 0.45:  
+                if roll <= 0.35:  
                     chosen = random.choice(emojis)
                     slot_result = [chosen, chosen, chosen]
                     winnings = bet * 3
