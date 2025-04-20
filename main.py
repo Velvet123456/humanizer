@@ -264,13 +264,13 @@ class SelfBot(discord.Client):
             else:
 
                 roll = random.random()
-                if roll <= 0.35:  
+                if roll <= 0.30:  
                     chosen = random.choice(emojis)
                     slot_result = [chosen, chosen, chosen]
                     winnings = bet * 3
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{winnings}** (Balance: {get_balance(user_id)})")
-                elif roll <= 0.55: 
+                elif roll <= 0.45: 
                     chosen = random.choice(emojis)
                     others = [e for e in emojis if e != chosen]
                     third = random.choice(others)
