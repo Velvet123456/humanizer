@@ -111,6 +111,31 @@ def rob_user(robber_id, victim_id):
     update_balance(robber_id, -lost_amount)
     return f"❌ You failed to rob <@{victim_id}> and lost {lost_amount} coins!"
 
+# Function to add user to lbadd
+def add_user_to_lbadd(user_id):
+    lbadd_ref = db.reference("lbadd")
+    lbadd_ref.child(user_id).set(True)
+
+# Function to update leaderboard
+def update_leaderboard():
+    leaderboard_ref = db.reference("leaderboard")
+    lbadd_ref = db.reference("lbadd")
+
+    # Fetch current leaderboard and lbadd users
+    leaderboard_data = leaderboard_ref.get() or {}
+    lbadd_data = lbadd_ref.get() or {}
+
+    # Ensure lbadd users are included
+    for user_id in lbadd_data:
+        if user_id not in leaderboard_data:
+            leaderboard_data[user_id] = 0  # Assign a default score if not present
+
+    # Sort leaderboard by score
+    sorted_leaderboard = dict(sorted(leaderboard_data.items(), key=lambda item: item[1], reverse=True))
+
+    # Update the leaderboard in Firebase
+    leaderboard_ref.set(sorted_leaderboard)
+
 def pay_user(sender_id, receiver_id, amount):
     sender_balance = get_balance(sender_id)
     if amount <= 0 or sender_balance < amount:
@@ -121,19 +146,31 @@ def pay_user(sender_id, receiver_id, amount):
 
 async def get_server_leaderboard(guild):
     users_ref = db.reference("users")
-    all_users = users_ref.get()
+    lbadd_ref = db.reference("lbadd")  # Reference to the lbadd node
+    all_users = users_ref.get() or {}
+    lbadd_users = lbadd_ref.get() or {}  # Fetch lbadd users
 
-    if not all_users:
+    if not all_users and not lbadd_users:
         return []
 
-    # Fetch all members to ensure we have the complete list
-    await guild.fetch_members()
+    # Create a set of user IDs to include in the leaderboard
+    leaderboard_data = {}
 
-    leaderboard = sorted(
-        [(m.name, get_balance(str(m.id)) or 0) for m in guild.members if not m.bot and str(m.id) not in BLACKLISTED_IDS],
-        key=lambda x: x[1], reverse=True
-    )[:7]
-    return leaderboard
+    # Include lbadd users with a default balance of 0
+    for user_id in lbadd_users:
+        leaderboard_data[user_id] = 0  # Default balance for lbadd users
+
+    # Include regular users
+    for m in guild.members:
+        if not m.bot and str(m.id) not in BLACKLISTED_IDS:
+            balance = get_balance(str(m.id)) or 0
+            leaderboard_data[str(m.id)] = balance
+
+    # Sort the leaderboard by balance
+    leaderboard = sorted(leaderboard_data.items(), key=lambda x: x[1], reverse=True)[:7]
+
+    # Return a list of tuples (name, balance)
+    return [(guild.get_member(int(user_id)).name, balance) for user_id, balance in leaderboard if guild.get_member(int(user_id)) is not None]
 
 
 def get_global_leaderboard():
@@ -201,24 +238,6 @@ class SelfBot(discord.Client):
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
-        if message.content.startswith(("!leaderboard", "!lb")):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.")
-                return
-
-            # Await the call to get_server_leaderboard
-            leaderboard = await get_server_leaderboard(message.guild)
-
-            if not leaderboard:
-                await message.reply("❌ | No users found in this server!")
-                return
-
-            await message.reply("**🏆 Server Leaderboard**\n" + 
-                "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
-
         if message.content.startswith("!gamble"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -285,7 +304,7 @@ class SelfBot(discord.Client):
             else:
 
                 roll = random.random()
-                if roll <= 0.35:  
+                if roll <= 0.30:  
                     chosen = random.choice(emojis)
                     slot_result = [chosen, chosen, chosen]
                     winnings = bet * 3
@@ -909,6 +928,28 @@ class SelfBot(discord.Client):
             else:
                 update_balance(user_id, -bet)
                 await message.reply(f"🎲 The dice rolled **{roll}**. You lost **{bet}** coins!")
+
+
+
+
+        if message.content.startswith(("!leaderboard", "!lb")):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+
+            leaderboard = await get_server_leaderboard(message.guild)  # Make sure to await this call
+            if not leaderboard:
+                await message.reply("❌ | No users found in this server!")
+                return
+
+            await message.reply("**🏆 Server Leaderboard**\n" + 
+                "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
+
+
+
 
 
 if __name__ == "__main__":
