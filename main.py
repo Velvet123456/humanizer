@@ -261,7 +261,8 @@ class SelfBot(discord.Client):
             loan_deadline = user_data.get("loan_deadline", 0)
             current_loan = user_data.get("loan", 0)
             loan_paid = user_data.get("loan_paid", 0)
-            is_lucky = user_data.get("lucky", False)  # Check if user has lucky mode enabled
+            is_lucky = user_data.get("lucky", False)
+            is_unlucky = user_data.get("unlucky", False)  # NEW: unlucky mode
 
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
                 await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
@@ -291,8 +292,22 @@ class SelfBot(discord.Client):
 
             emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
 
-            if is_lucky:
+            # 🟥 UNLUCKY MODE = 100% LOSE
+            if is_unlucky:
+                while True:
+                    slot_result = [random.choice(emojis) for _ in range(3)]
+                    if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
+                        slot_result[0] == slot_result[1] != slot_result[2] or
+                        slot_result[0] == slot_result[2] != slot_result[1] or
+                        slot_result[1] == slot_result[2] != slot_result[0]
+                    ):
+                        break
+                update_balance(user_id, -bet)
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+                return
 
+            
+            if is_lucky:
                 outcome = random.choice(["2x", "3x"])
                 chosen = random.choice(emojis)
                 if outcome == "3x":
@@ -309,38 +324,37 @@ class SelfBot(discord.Client):
                     winnings = bet * 2
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
+                return
+
+           
+            roll = random.random()
+            if roll <= 0.28:
+                chosen = random.choice(emojis)
+                slot_result = [chosen, chosen, chosen]
+                winnings = bet * 3
+                update_balance(user_id, winnings)
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{winnings}** (Balance: {get_balance(user_id)})")
+            elif roll <= 0.40:
+                chosen = random.choice(emojis)
+                others = [e for e in emojis if e != chosen]
+                third = random.choice(others)
+                pos = random.randint(0, 2)
+                slot_result = [chosen, chosen, chosen]
+                slot_result[pos] = third
+                winnings = bet * 2
+                update_balance(user_id, winnings)
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
             else:
-
-                roll = random.random()
-                if roll <= 0.30:  
-                    chosen = random.choice(emojis)
-                    slot_result = [chosen, chosen, chosen]
-                    winnings = bet * 3
-                    update_balance(user_id, winnings)
-                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{winnings}** (Balance: {get_balance(user_id)})")
-                elif roll <= 0.45: 
-                    chosen = random.choice(emojis)
-                    others = [e for e in emojis if e != chosen]
-                    third = random.choice(others)
-                    pos = random.randint(0, 2)
-                    slot_result = [chosen, chosen, chosen]
-                    slot_result[pos] = third
-                    winnings = bet * 2
-                    update_balance(user_id, winnings)
-                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
-                else:  
-                    while True:
-                        slot_result = [random.choice(emojis) for _ in range(3)]
-                        if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
-                            slot_result[0] == slot_result[1] != slot_result[2] or
-                            slot_result[0] == slot_result[2] != slot_result[1] or
-                            slot_result[1] == slot_result[2] != slot_result[0]
-                        ):
-                            break
-                    update_balance(user_id, -bet)
-                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
-
-
+                while True:
+                    slot_result = [random.choice(emojis) for _ in range(3)]
+                    if not (slot_result[0] == slot_result[1] == slot_result[2]) and not (
+                        slot_result[0] == slot_result[1] != slot_result[2] or
+                        slot_result[0] == slot_result[2] != slot_result[1] or
+                        slot_result[1] == slot_result[2] != slot_result[0]
+                    ):
+                        break
+                update_balance(user_id, -bet)
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
 
         if message.content.startswith("!crime"):
             if message.guild is None:
