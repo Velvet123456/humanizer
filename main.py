@@ -24,7 +24,7 @@ def home():
     return "ntsbot is successfully running! with no errors."
 
 
-BLACKLISTED_IDS = ["0"]
+BLACKLISTED_IDS = ["1354087903126487120"]
 
 cred = credentials.Certificate("rohackersz-firebase-adminsdk-fbsvc-ef11a7abad.json")
 firebase_admin.initialize_app(cred, {
@@ -146,31 +146,39 @@ def pay_user(sender_id, receiver_id, amount):
 
 async def get_server_leaderboard(guild):
     users_ref = db.reference("users")
-    lbadd_ref = db.reference("lbadd")  # Reference to the lbadd node
+    lbadd_ref = db.reference("lbadd")
     all_users = users_ref.get() or {}
-    lbadd_users = lbadd_ref.get() or {}  # Fetch lbadd users
+    lbadd_users = lbadd_ref.get() or {}
 
     if not all_users and not lbadd_users:
         return []
 
-    # Create a set of user IDs to include in the leaderboard
     leaderboard_data = {}
 
-    # Include lbadd users with a default balance of 0
+    # Include lbadd users with default balance 0, skip blacklisted
     for user_id in lbadd_users:
-        leaderboard_data[user_id] = 0  # Default balance for lbadd users
+        if str(user_id) not in BLACKLISTED_IDS:
+            leaderboard_data[str(user_id)] = 0
 
-    # Include regular users
-    for m in guild.members:
-        if not m.bot and str(m.id) not in BLACKLISTED_IDS:
-            balance = get_balance(str(m.id)) or 0
-            leaderboard_data[str(m.id)] = balance
+    # Include regular users in the server
+    for member in guild.members:
+        user_id = str(member.id)
+        if not member.bot and user_id not in BLACKLISTED_IDS:
+            balance = get_balance(user_id) or 0
+            leaderboard_data[user_id] = balance
 
-    # Sort the leaderboard by balance
-    leaderboard = sorted(leaderboard_data.items(), key=lambda x: x[1], reverse=True)[:7]
+    # Sort by balance and get top 7
+    sorted_leaderboard = sorted(
+        leaderboard_data.items(), key=lambda x: x[1], reverse=True
+    )[:7]
 
-    # Return a list of tuples (name, balance)
-    return [(guild.get_member(int(user_id)).name, balance) for user_id, balance in leaderboard if guild.get_member(int(user_id)) is not None]
+    final_result = []
+    for user_id, balance in sorted_leaderboard:
+        member = guild.get_member(int(user_id))
+        if member:  # Ensure member still exists
+            final_result.append((member.name, balance))
+
+    return final_result
 
 
 def get_global_leaderboard():
