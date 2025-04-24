@@ -24,7 +24,7 @@ def home():
     return "ntsbot is successfully running! with no errors."
 
 
-BLACKLISTED_IDS = ["1354087903126487120"]
+BLACKLISTED_IDS = ["0"]
 
 cred = credentials.Certificate("rohackersz-firebase-adminsdk-fbsvc-ef11a7abad.json")
 firebase_admin.initialize_app(cred, {
