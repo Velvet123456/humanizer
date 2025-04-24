@@ -27,7 +27,7 @@ cred = credentials.Certificate("rohackersz-firebase-adminsdk-fbsvc-ef11a7abad.js
 firebase_admin.initialize_app(cred, {
     "databaseURL": "https://rohackersz-default-rtdb.firebaseio.com/"
 })
-
+BLACKLISTED_IDS = []
 ban_ref = db.reference("economyban")
 
 def is_banned(user_id: int) -> bool:
