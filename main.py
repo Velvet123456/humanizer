@@ -23,9 +23,6 @@ if not TOKEN:
 def home():
     return "ntsbot is successfully running! with no errors."
 
-
-BLACKLISTED_IDS = ["1354087903126487120"]
-
 cred = credentials.Certificate("rohackersz-firebase-adminsdk-fbsvc-ef11a7abad.json")
 firebase_admin.initialize_app(cred, {
     "databaseURL": "https://rohackersz-default-rtdb.firebaseio.com/"
@@ -188,11 +185,6 @@ def pay_user(sender_id, receiver_id, amount):
     update_balance(receiver_id, amount)
     return f"✅ You sent {amount} coins to <@{receiver_id}>!"
 
-def is_blacklisted(user_id):
-    ref = db.reference("blacklistid")
-    data = ref.get() or {}
-    return str(user_id) in data and data[str(user_id)] == True
-
 async def get_server_leaderboard(guild):
     users_ref = db.reference("users")
     lbadd_ref = db.reference("lbadd")
@@ -246,6 +238,7 @@ def get_global_leaderboard():
         leaderboard.append((f"<@{user_id}>", balance))
 
     return sorted(leaderboard, key=lambda x: x[1], reverse=True)[:7]
+
 
 
 def get_xp(user_id):
