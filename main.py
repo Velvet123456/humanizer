@@ -71,6 +71,50 @@ def set_last_weeklyclaim(user_id, timestamp):
     ref = db.reference(f"users/{user_id}/last_weekly")
     ref.set(timestamp)
 
+def get_bank_limit(user_id):
+    level = get_level(user_id)
+
+    bank_limit = 500000 + (level - 1) * 1000000
+    return bank_limit
+
+def update_bank_balance(user_id, amount):
+    user_ref = db.reference(f"users/{user_id}/bank")
+
+
+    current_balance = user_ref.get()
+    new_balance = current_balance + amount 
+
+
+    user_ref.set(new_balance)
+
+
+def format_number(number):
+    if number >= 1_000_000_000_000:
+        value = number / 1_000_000_000_000
+        suffix = "T"
+    elif number >= 1_000_000_000:
+        value = number / 1_000_000_000
+        suffix = "B"
+    elif number >= 1_000_000:
+        value = number / 1_000_000
+        suffix = "M"
+    elif number >= 1_000:
+        value = number / 1_000
+        suffix = "K"
+    else:
+        return str(number)
+
+    return f"{int(value) if value.is_integer() else round(value, 1)}{suffix}"
+
+
+def get_bank_balance(user_id):
+    user_ref = db.reference(f"users/{user_id}")
+    user_data = user_ref.get()
+
+    if user_data and "bank" in user_data:
+        return user_data["bank"]
+    return 0 
+
 def redeem_code(user_id, code):
     code = code.lower()
     ref = db.reference("codes")
@@ -102,7 +146,7 @@ def rob_user(robber_id, victim_id):
     robber_ref.update({"last_rob_time": current_time})
     if victim_balance < 100:
         return "❌ This user is too poor to rob!"
-    if random.randint(1, 100) <= 28:
+    if random.randint(1, 100) <= 30:
         stolen_amount = int(victim_balance * 0.28)
         update_balance(robber_id, stolen_amount)
         update_balance(victim_id, -stolen_amount)
@@ -111,29 +155,29 @@ def rob_user(robber_id, victim_id):
     update_balance(robber_id, -lost_amount)
     return f"❌ You failed to rob <@{victim_id}> and lost {lost_amount} coins!"
 
-# Function to add user to lbadd
+
 def add_user_to_lbadd(user_id):
     lbadd_ref = db.reference("lbadd")
     lbadd_ref.child(user_id).set(True)
 
-# Function to update leaderboard
+
 def update_leaderboard():
     leaderboard_ref = db.reference("leaderboard")
     lbadd_ref = db.reference("lbadd")
 
-    # Fetch current leaderboard and lbadd users
+    
     leaderboard_data = leaderboard_ref.get() or {}
     lbadd_data = lbadd_ref.get() or {}
 
-    # Ensure lbadd users are included
+    
     for user_id in lbadd_data:
         if user_id not in leaderboard_data:
-            leaderboard_data[user_id] = 0  # Assign a default score if not present
+            leaderboard_data[user_id] = 0
 
-    # Sort leaderboard by score
+    
     sorted_leaderboard = dict(sorted(leaderboard_data.items(), key=lambda item: item[1], reverse=True))
 
-    # Update the leaderboard in Firebase
+    
     leaderboard_ref.set(sorted_leaderboard)
 
 def pay_user(sender_id, receiver_id, amount):
@@ -155,19 +199,19 @@ async def get_server_leaderboard(guild):
 
     leaderboard_data = {}
 
-    # Include lbadd users with default balance 0, skip blacklisted
+
     for user_id in lbadd_users:
         if str(user_id) not in BLACKLISTED_IDS:
             leaderboard_data[str(user_id)] = 0
 
-    # Include regular users in the server
+    
     for member in guild.members:
         user_id = str(member.id)
         if not member.bot and user_id not in BLACKLISTED_IDS:
             balance = get_balance(user_id) or 0
             leaderboard_data[user_id] = balance
 
-    # Sort by balance and get top 7
+    
     sorted_leaderboard = sorted(
         leaderboard_data.items(), key=lambda x: x[1], reverse=True
     )[:7]
@@ -175,7 +219,7 @@ async def get_server_leaderboard(guild):
     final_result = []
     for user_id, balance in sorted_leaderboard:
         member = guild.get_member(int(user_id))
-        if member:  # Ensure member still exists
+        if member: 
             final_result.append((member.name, balance))
 
     return final_result
@@ -246,6 +290,14 @@ class SelfBot(discord.Client):
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
+        user_ref = db.reference(f"users/{message.author.id}")
+        user_data = user_ref.get()
+
+        if not user_data or "bank" not in user_data:
+            user_ref.update({"bank": 0})
+
+
+
         if message.content.startswith("!gamble"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -262,7 +314,7 @@ class SelfBot(discord.Client):
             current_loan = user_data.get("loan", 0)
             loan_paid = user_data.get("loan_paid", 0)
             is_lucky = user_data.get("lucky", False)
-            is_unlucky = user_data.get("unlucky", False)  # NEW: unlucky mode
+            is_unlucky = user_data.get("unlucky", False)
 
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
                 await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
@@ -292,7 +344,7 @@ class SelfBot(discord.Client):
 
             emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
 
-            # 🟥 UNLUCKY MODE = 100% LOSE
+
             if is_unlucky:
                 while True:
                     slot_result = [random.choice(emojis) for _ in range(3)]
@@ -306,7 +358,7 @@ class SelfBot(discord.Client):
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
                 return
 
-            
+
             if is_lucky:
                 outcome = random.choice(["2x", "3x"])
                 chosen = random.choice(emojis)
@@ -326,7 +378,7 @@ class SelfBot(discord.Client):
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
                 return
 
-           
+
             roll = random.random()
             if roll <= 0.28:
                 chosen = random.choice(emojis)
@@ -355,6 +407,36 @@ class SelfBot(discord.Client):
                         break
                 update_balance(user_id, -bet)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+
+        if message.content.startswith("!withdraw"):
+                parts = message.content.split()
+
+                if len(parts) < 2:
+                    await message.reply("❌ Please specify an amount to withdraw!")
+                    return
+
+                amount_str = parts[1]
+                if amount_str.lower() == "all":
+                    amount = get_bank_balance(message.author.id) 
+                elif amount_str.isdigit():
+                    amount = int(amount_str)
+                else:
+                    await message.reply("❌ Please provide a valid amount!")
+                    return
+
+                bank_limit = get_bank_limit(message.author.id)
+                current_balance = get_bank_balance(message.author.id)
+
+                if amount > current_balance:
+                    await message.reply(f"❌ You don't have enough balance in your bank! Your bank balance is {current_balance}.")
+                    return
+                if amount > bank_limit:
+                    await message.reply(f"❌ You cannot withdraw more than your bank limit of {bank_limit}!")
+                    return
+
+                update_bank_balance(message.author.id, -amount)
+                await message.reply(f"✅ Successfully withdrew {amount} from your bank!")
+
 
         if message.content.startswith("!crime"):
             if message.guild is None:
@@ -509,11 +591,13 @@ class SelfBot(discord.Client):
                 "9. !blackjack <amount> - Play a game of blackjack.\n"
                 "10. !loan <amount> - Take loan from the bank.\n"
                 "11. !payloan <amount> - Pay back the loan amount.\n"
-                "12. !dice <amount> <number> - Roll dice for prize.\n"
-                "13. !redeem <code> - Redeem a code.\n"
-                "14. !rob @user - Steal coins from others.\n"
-                "15. !transfer @user <amount> - Transfer coins.\n"
-                "16. !leaderboard - Check The Server Leaderboard.\n"
+                "12. !deposite <amount> - Deposite cash to the bank.\n"
+                "13. !withdraw <amount> - Withdraw cash from the bank.\n"
+                "14. !dice <amount> <number> - Roll dice for prize.\n"
+                "15. !redeem <code> - Redeem a code.\n"
+                "16. !rob @user - Steal coins from others.\n"
+                "17. !transfer @user <amount> - Transfer coins.\n"
+                "18. !leaderboard - Check The Server Leaderboard.\n"
             )
 
         if message.content.startswith("!blackjack"):
@@ -613,32 +697,69 @@ class SelfBot(discord.Client):
 
 
 
+        if message.content.startswith("!deposit"):
+            parts = message.content.split()
+            if len(parts) != 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
+                await message.reply("Usage: `!deposit <amount/all>`")
+                return
 
+            balance = user_data.get("balance", 0)
+            bank = user_data.get("bank", 0)
+            level = user_data.get("level", 1)
+            bank_limit = 500000 + ((level - 1) * 1000000)
+
+            if parts[1].lower() == "all":
+                deposit_amount = min(balance, bank_limit - bank)
+            else:
+                deposit_amount = int(parts[1])
+                if deposit_amount > balance:
+                    await message.reply("❌ You don't have that much money.")
+                    return
+                if deposit_amount + bank > bank_limit:
+                    await message.reply("❌ This deposit would exceed your bank limit.")
+                    return
+
+            if deposit_amount <= 0:
+                await message.reply("❌ Invalid deposit amount.")
+                return
+
+            update_balance(user_id, -deposit_amount)
+            user_ref.update({"bank": bank + deposit_amount})
+            await message.reply(f"✅ Deposited {deposit_amount} coins to bank! 🏦")
 
 
         if message.content.startswith("!profile"):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
-            if is_banned(message.author.id):
-                await message.reply("❌ | You are **banned** from using this bot.")
-                return
-            target = message.mentions[0] if message.mentions else message.author
-            target_id = str(target.id)
-            xp_message = update_xp(user_id, 1)
-            balance = get_balance(target_id)
-            level = get_level(target_id)
-            xp = get_xp(target_id)
-            xp_needed = 100 + (level - 1) * 150
-            profile_msg = (
-                f"{target.name}'s Profile:\n\n"
-                f"1. Balance: {balance}\n"
-                f"2. Level: {level}\n"
-                f"3. XP: {xp}/{xp_needed}"
-            )
-            await message.reply(profile_msg)
+                if message.guild is None:
+                    await message.reply("❌ This command can only be used in a server!")
+                    return
 
-        # !work command
+                target = message.mentions[0] if message.mentions else message.author
+                target_id = str(target.id)
+
+                balance = get_balance(target_id)
+                bank_balance = get_bank_balance(target_id)
+                bank_limit = get_bank_limit(target_id)
+                level = get_level(target_id)
+                xp = get_xp(target_id)
+                xp_needed = 100 + (level - 1) * 150
+
+                
+                formatted_balance = format_number(balance)
+                formatted_bank_balance = format_number(bank_balance)
+                formatted_bank_limit = format_number(bank_limit)
+
+                profile_msg = (
+                    f"{target.name}'s Profile:\n\n"
+                    f"1. Balance: {formatted_balance}\n"
+                    f"2. Bank Balance: {formatted_bank_balance}/{formatted_bank_limit}\n"
+                    f"3. Level: {level}\n"
+                    f"4. XP: {xp}/{xp_needed}"
+                )
+
+                await message.reply(profile_msg)
+
+
+        
         if message.content.startswith("!work"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -962,7 +1083,7 @@ class SelfBot(discord.Client):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
 
-            leaderboard = await get_server_leaderboard(message.guild)  # Make sure to await this call
+            leaderboard = await get_server_leaderboard(message.guild) 
             if not leaderboard:
                 await message.reply("❌ | No users found in this server!")
                 return
