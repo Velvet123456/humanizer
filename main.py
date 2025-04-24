@@ -204,16 +204,19 @@ async def get_server_leaderboard(guild):
 
     leaderboard_data = {}
 
+
     for user_id in lbadd_users:
-        if not is_blacklisted(user_id):
+        if str(user_id) not in BLACKLISTED_IDS:
             leaderboard_data[str(user_id)] = 0
 
+    
     for member in guild.members:
         user_id = str(member.id)
-        if not member.bot and not is_blacklisted(user_id):
+        if not member.bot and user_id not in BLACKLISTED_IDS:
             balance = get_balance(user_id) or 0
             leaderboard_data[user_id] = balance
 
+    
     sorted_leaderboard = sorted(
         leaderboard_data.items(), key=lambda x: x[1], reverse=True
     )[:7]
@@ -221,7 +224,7 @@ async def get_server_leaderboard(guild):
     final_result = []
     for user_id, balance in sorted_leaderboard:
         member = guild.get_member(int(user_id))
-        if member:
+        if member: 
             final_result.append((member.name, balance))
 
     return final_result
