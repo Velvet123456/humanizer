@@ -24,7 +24,7 @@ def home():
     return "ntsbot is successfully running! with no errors."
 
 
-BLACKLISTED_IDS = ["0"]
+BLACKLISTED_IDS = ["1354087903126487120"]
 
 cred = credentials.Certificate("rohackersz-firebase-adminsdk-fbsvc-ef11a7abad.json")
 firebase_admin.initialize_app(cred, {
@@ -188,6 +188,11 @@ def pay_user(sender_id, receiver_id, amount):
     update_balance(receiver_id, amount)
     return f"✅ You sent {amount} coins to <@{receiver_id}>!"
 
+def is_blacklisted(user_id):
+    ref = db.reference("blacklistid")
+    data = ref.get() or {}
+    return str(user_id) in data and data[str(user_id)] == True
+
 async def get_server_leaderboard(guild):
     users_ref = db.reference("users")
     lbadd_ref = db.reference("lbadd")
@@ -199,19 +204,16 @@ async def get_server_leaderboard(guild):
 
     leaderboard_data = {}
 
-
     for user_id in lbadd_users:
-        if str(user_id) not in BLACKLISTED_IDS:
+        if not is_blacklisted(user_id):
             leaderboard_data[str(user_id)] = 0
 
-    
     for member in guild.members:
         user_id = str(member.id)
-        if not member.bot and user_id not in BLACKLISTED_IDS:
+        if not member.bot and not is_blacklisted(user_id):
             balance = get_balance(user_id) or 0
             leaderboard_data[user_id] = balance
 
-    
     sorted_leaderboard = sorted(
         leaderboard_data.items(), key=lambda x: x[1], reverse=True
     )[:7]
@@ -219,7 +221,7 @@ async def get_server_leaderboard(guild):
     final_result = []
     for user_id, balance in sorted_leaderboard:
         member = guild.get_member(int(user_id))
-        if member: 
+        if member:
             final_result.append((member.name, balance))
 
     return final_result
@@ -241,7 +243,6 @@ def get_global_leaderboard():
         leaderboard.append((f"<@{user_id}>", balance))
 
     return sorted(leaderboard, key=lambda x: x[1], reverse=True)[:7]
-
 
 
 def get_xp(user_id):
@@ -410,32 +411,39 @@ class SelfBot(discord.Client):
 
         if message.content.startswith("!withdraw"):
                 parts = message.content.split()
-
                 if len(parts) < 2:
                     await message.reply("❌ Please specify an amount to withdraw!")
                     return
 
                 amount_str = parts[1]
+                user_id = str(message.author.id)
+
+                # Get balances
+                bank_balance = get_bank_balance(user_id)
+                wallet_balance = get_balance(user_id)
+
                 if amount_str.lower() == "all":
-                    amount = get_bank_balance(message.author.id) 
+                    amount = bank_balance
                 elif amount_str.isdigit():
                     amount = int(amount_str)
                 else:
                     await message.reply("❌ Please provide a valid amount!")
                     return
 
-                bank_limit = get_bank_limit(message.author.id)
-                current_balance = get_bank_balance(message.author.id)
-
-                if amount > current_balance:
-                    await message.reply(f"❌ You don't have enough balance in your bank! Your bank balance is {current_balance}.")
-                    return
-                if amount > bank_limit:
-                    await message.reply(f"❌ You cannot withdraw more than your bank limit of {bank_limit}!")
+                if amount <= 0:
+                    await message.reply("❌ Amount must be greater than zero!")
                     return
 
-                update_bank_balance(message.author.id, -amount)
-                await message.reply(f"✅ Successfully withdrew {amount} from your bank!")
+                if amount > bank_balance:
+                    await message.reply(f"❌ You don't have enough bank balance! You only have {format_number(bank_balance)}.")
+                    return
+
+                
+                update_bank_balance(user_id, -amount)
+                update_balance(user_id, amount)
+
+                await message.reply(f"✅ Successfully withdrew {format_number(amount)} from your bank into your wallet!")
+
 
 
         if message.content.startswith("!crime"):
