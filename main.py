@@ -162,19 +162,19 @@ def update_leaderboard():
     leaderboard_ref = db.reference("leaderboard")
     lbadd_ref = db.reference("lbadd")
 
-    
+
     leaderboard_data = leaderboard_ref.get() or {}
     lbadd_data = lbadd_ref.get() or {}
 
-    
+
     for user_id in lbadd_data:
         if user_id not in leaderboard_data:
             leaderboard_data[user_id] = 0
 
-    
+
     sorted_leaderboard = dict(sorted(leaderboard_data.items(), key=lambda item: item[1], reverse=True))
 
-    
+
     leaderboard_ref.set(sorted_leaderboard)
 
 def pay_user(sender_id, receiver_id, amount):
@@ -201,14 +201,14 @@ async def get_server_leaderboard(guild):
         if str(user_id) not in BLACKLISTED_IDS:
             leaderboard_data[str(user_id)] = 0
 
-    
+
     for member in guild.members:
         user_id = str(member.id)
         if not member.bot and user_id not in BLACKLISTED_IDS:
             balance = get_balance(user_id) or 0
             leaderboard_data[user_id] = balance
 
-    
+
     sorted_leaderboard = sorted(
         leaderboard_data.items(), key=lambda x: x[1], reverse=True
     )[:7]
@@ -294,7 +294,6 @@ class SelfBot(discord.Client):
             user_ref.update({"bank": 0})
 
 
-
         if message.content.startswith("!gamble"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -307,6 +306,7 @@ class SelfBot(discord.Client):
             user_id = str(message.author.id)
             user_ref = db.reference(f"users/{user_id}")
             user_data = user_ref.get() or {}
+            last_gamble = user_data.get("last_gamble", 0)
             loan_deadline = user_data.get("loan_deadline", 0)
             current_loan = user_data.get("loan", 0)
             loan_paid = user_data.get("loan_paid", 0)
@@ -315,6 +315,11 @@ class SelfBot(discord.Client):
 
             if loan_deadline > 0 and time.time() > loan_deadline and (current_loan - loan_paid) > 0:
                 await message.reply("❌ You failed to repay your loan on time! You cannot use some commands until you **fully repay** your loan.")
+                return
+
+            if time.time() - last_gamble < 5:
+                remaining = int(5 - (time.time() - last_gamble))
+                await message.channel.send(f"⏳ You can use `!gamble` again in {remaining}s.")
                 return
 
             if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
@@ -341,7 +346,6 @@ class SelfBot(discord.Client):
 
             emojis = ["🍒", "🍊", "🍋", "🍇", "🍉"]
 
-
             if is_unlucky:
                 while True:
                     slot_result = [random.choice(emojis) for _ in range(3)]
@@ -353,8 +357,8 @@ class SelfBot(discord.Client):
                         break
                 update_balance(user_id, -bet)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+                user_ref.update({"last_gamble": time.time()})
                 return
-
 
             if is_lucky:
                 outcome = random.choice(["2x", "3x"])
@@ -373,8 +377,8 @@ class SelfBot(discord.Client):
                     winnings = bet * 2
                     update_balance(user_id, winnings)
                     await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
+                user_ref.update({"last_gamble": time.time()})
                 return
-
 
             roll = random.random()
             if roll <= 0.28:
@@ -405,6 +409,9 @@ class SelfBot(discord.Client):
                 update_balance(user_id, -bet)
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
 
+            user_ref.update({"last_gamble": time.time()})
+
+
         if message.content.startswith("!withdraw"):
                 parts = message.content.split()
                 if len(parts) < 2:
@@ -414,7 +421,7 @@ class SelfBot(discord.Client):
                 amount_str = parts[1]
                 user_id = str(message.author.id)
 
-                # Get balances
+                
                 bank_balance = get_bank_balance(user_id)
                 wallet_balance = get_balance(user_id)
 
@@ -434,7 +441,7 @@ class SelfBot(discord.Client):
                     await message.reply(f"❌ You don't have enough bank balance! You only have {format_number(bank_balance)}.")
                     return
 
-                
+
                 update_bank_balance(user_id, -amount)
                 update_balance(user_id, amount)
 
@@ -584,24 +591,40 @@ class SelfBot(discord.Client):
                 return
             await message.reply(
                 "**ntsbot Commands:**\n"
-                "1. !profile [@user] - Check profile\n"
-                "2. !work - Just Work.\n"
-                "3. !daily - Claim daily rewards.\n"
-                "4. !weekly - Claim weekly rewards.\n"
-                "5. !gamble <amount/all> - Gamble coins.\n"
-                "6. !coinflip <amount> <heads/tails> - Coinflip.\n"
-                "7. !crime - Commit a crime.\n"
-                "8. !roulette <red/black> <amount> - Play roulette.\n"
-                "9. !blackjack <amount> - Play a game of blackjack.\n"
-                "10. !loan <amount> - Take loan from the bank.\n"
-                "11. !payloan <amount> - Pay back the loan amount.\n"
-                "12. !deposite <amount> - Deposite cash to the bank.\n"
-                "13. !withdraw <amount> - Withdraw cash from the bank.\n"
-                "14. !dice <amount> <number> - Roll dice for prize.\n"
-                "15. !redeem <code> - Redeem a code.\n"
-                "16. !rob @user - Steal coins from others.\n"
-                "17. !transfer @user <amount> - Transfer coins.\n"
-                "18. !leaderboard - Check The Server Leaderboard.\n"
+                "1. !profile [@user] - Check profile.\n"
+                "2. !rules - View ntsbot's rules.\n"
+                "3. !work - Just Work.\n"
+                "4. !daily - Claim daily rewards.\n"
+                "5. !weekly - Claim weekly rewards.\n"
+                "6. !gamble <amount/all> - Gamble coins.\n"
+                "7. !coinflip <amount> <heads/tails> - Coinflip.\n"
+                "8. !crime - Commit a crime.\n"
+                "9. !roulette <red/black> <amount> - Play roulette.\n"
+                "10. !blackjack <amount> - Play a game of blackjack.\n"
+                "11. !loan <amount> - Take loan from the bank.\n"
+                "12. !payloan <amount> - Pay back the loan amount.\n"
+                "13. !deposite <amount> - Deposite cash to the bank.\n"
+                "14. !withdraw <amount> - Withdraw cash from the bank.\n"
+                "15. !dice <amount> <number> - Roll dice for prize.\n"
+                "16. !redeem <code> - Redeem a code.\n"
+                "17. !rob @user - Steal coins from others.\n"
+                "18. !transfer @user <amount> - Transfer coins.\n"
+                "19. !leaderboard - Check The Server Leaderboard.\n"
+            )
+
+        if message.content.startswith("!rules"):
+            if message.guild is None:
+                await message.reply("❌ | This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            await message.reply(
+                "**ntsbot Rules:**\n"
+                "```diff\n"
+                "- No spamming commands. (Ban)\n"
+                "- Do not abuse the bot in any ways. (Temp/Perm Ban)\n"
+                "+ Enjoy ntsbot!```\n"
             )
 
         if message.content.startswith("!blackjack"):
@@ -747,7 +770,7 @@ class SelfBot(discord.Client):
                 xp = get_xp(target_id)
                 xp_needed = 100 + (level - 1) * 150
 
-                
+
                 formatted_balance = format_number(balance)
                 formatted_bank_balance = format_number(bank_balance)
                 formatted_bank_limit = format_number(bank_limit)
@@ -763,7 +786,7 @@ class SelfBot(discord.Client):
                 await message.reply(profile_msg)
 
 
-        
+
         if message.content.startswith("!work"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
