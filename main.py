@@ -513,7 +513,7 @@ class SelfBot(discord.Client):
             if mentioned_user.id not in members:
                 await message.reply("❌ The mentioned user is not a member of your bank.")
                 return
-            
+
             members.remove(mentioned_user.id)
             bank_ref.child(bank_name).update({
                 "members": members
@@ -599,7 +599,7 @@ class SelfBot(discord.Client):
                     "isinclan": True
                 })
 
-                
+
                 bank_ref.set({
                     'owner': user_id,
                     'members': [user_id],
@@ -628,7 +628,7 @@ class SelfBot(discord.Client):
                 await message.reply("❌ You are not in a bank!")
                 return
 
-            
+
             banks_ref = db.reference("banks")
             banks = banks_ref.get() or {}
             user_bank = None
@@ -678,7 +678,7 @@ class SelfBot(discord.Client):
 
             await message.reply(f"🏦 Successfully deposited **{amount}** coins into your bank vault!")
             await asyncio.sleep(1)
-            
+
         if message.content.startswith("!bank withdraw"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -866,97 +866,99 @@ class SelfBot(discord.Client):
             user_ref.update({"isinclan": False})
 
             await message.reply(f"✅ You have successfully left the bank **{bank_name}**.")
-        
+
         if message.content.startswith("!bank join"):
-                if message.guild is None:
-                    await message.reply("❌ This command can only be used in a server!")
-                    return
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
 
-                parts = message.content.strip().split()
-                if len(parts) != 2:
-                    await message.reply("❌ Usage: `!bank join <invitecode>`")
-                    return
+            parts = message.content.strip().split(maxsplit=2)
+            if len(parts) != 3:
+                await message.reply("❌ Usage: `!bank join <invitecode>`")
+                return
 
-                invite_code = parts[1]
-                user_id = message.author.id
+            invite_code = parts[2]
+            user_id = message.author.id
 
-                banks_ref = db.reference("banks")
-                banks = banks_ref.get() or {}
-                bank_name = None
-                for name, data in banks.items():
-                    if data.get("invitecode") == invite_code:
-                        bank_name = name
-                        break
+            banks_ref = db.reference("banks")
+            banks = banks_ref.get() or {}
+            bank_name = None
+            for name, data in banks.items():
+                if data.get("invitecode") == invite_code:
+                    bank_name = name
+                    break
 
-                if not bank_name:
-                    await message.reply("❌ Invalid invite code.")
-                    return
+            if not bank_name:
+                await message.reply("❌ Invalid invite code.")
+                return
 
-                bank_ref = db.reference(f"banks/{bank_name}")
-                bank_data = bank_ref.get()
+            bank_ref = db.reference(f"banks/{bank_name}")
+            bank_data = bank_ref.get()
 
-                if user_id in bank_data.get("members", []):
-                    await message.reply("❌ You are already a member of this bank.")
-                    return
+            if user_id in bank_data.get("members", []):
+                await message.reply("❌ You are already a member of this bank.")
+                return
 
-                if user_id in bank_data.get("pending_requests", []):
-                    await message.reply("❌ You have already requested to join this bank.")
-                    return
+            if user_id in bank_data.get("pending_requests", []):
+                await message.reply("❌ You have already requested to join this bank.")
+                return
 
-                pending = bank_data.get("pending_requests", [])
-                pending.append(user_id)
-                bank_ref.update({"pending_requests": pending})
+            pending = bank_data.get("pending_requests", [])
+            pending.append(user_id)
+            bank_ref.update({"pending_requests": pending})
 
-                await message.reply(f"✅ Request sent! You have requested to join the bank **{bank_name}**.")
+            await message.reply(f"✅ Request sent! You have requested to join the bank **{bank_name}**.")
 
-                owner_id = bank_data.get("owner")
+            owner_id = bank_data.get("owner")
+            try:
                 owner = await client.fetch_user(owner_id)
-                if owner:
-                    try:
-                        dm = await owner.create_dm()
-                        prompt = await dm.send(
-                            f"👤 User {message.author.name}#{message.author.discriminator} wants to join your bank **{bank_name}**.\n"
-                            f"React with ✅ to approve."
-                        )
-                        await prompt.add_reaction("✅")
+                dm = await owner.create_dm()
+                prompt = await dm.send(
+                    f"👤 User {message.author.name}#{message.author.discriminator} wants to join your bank **{bank_name}**.\n"
+                    f"React with ✅ to approve."
+                )
+                await prompt.add_reaction("✅")
 
-                        def check(reaction, user):
-                            return (
-                                user.id == owner_id
-                                and str(reaction.emoji) == "✅"
-                                and reaction.message.id == prompt.id
-                            )
+                def check(reaction, user):
+                    return (
+                        user.id == owner_id
+                        and str(reaction.emoji) == "✅"
+                        and reaction.message.id == prompt.id
+                    )
 
+                try:
+                    await client.wait_for("reaction_add", timeout=3600.0, check=check)
+
+                    bank_data = bank_ref.get()
+                    pending = bank_data.get("pending_requests", [])
+                    if user_id in pending:
+                        pending.remove(user_id)
+                        members = bank_data.get("members", [])
+                        members.append(user_id)
+                        bank_ref.update({"pending_requests": pending, "members": members})
+
+                        user_ref = db.reference(f"users/{user_id}")
+                        user_ref.update({"isinclan": True})
+
+                        await dm.send(f"✅ {message.author.name} has been added to the bank.")
                         try:
-                            await client.wait_for("reaction_add", timeout=3600.0, check=check)
+                            await message.author.send(f"🎉 Your request to join **{bank_name}** has been approved!")
+                        except Exception:
+                            pass
+                    else:
+                        await dm.send("❌ The user is no longer in the pending requests.")
+                except asyncio.TimeoutError:
+                    await dm.send("⏰ Approval timed out.")
+            except Exception as e:
+                print(f"Error notifying the owner: {e}")
+                try:
+                    await message.author.send("⚠️ Could not notify the bank owner. Please try again later.")
+                except Exception:
+                    pass
 
-                            bank_data = bank_ref.get()
-                            pending = bank_data.get("pending_requests", [])
-                            if user_id in pending:
-                                pending.remove(user_id)
-                                members = bank_data.get("members", [])
-                                members.append(user_id)
-                                bank_ref.update({"pending_requests": pending, "members": members})
+            await asyncio.sleep(1)
 
-                                user_ref = db.reference(f"users/{user_id}")
-                                user_ref.update({"isinclan": True})
 
-                                await dm.send(f"✅ {message.author.name} has been added to the bank.")
-                                await message.author.send(f"🎉 Your request to join **{bank_name}** has been approved!")
-                            else:
-                                await dm.send("❌ The user is no longer in the pending requests.")
-                        except asyncio.TimeoutError:
-                            await dm.send("⏰ Approval timed out.")
-                            return
-                    except Exception as e:
-                        print(f"Error sending DM to owner: {e}")
-                        await message.author.send("⚠️ Could not notify the bank owner. Please try again later.")
-                else:
-                    await message.reply("⚠️ Bank owner not found.")
-
-                await asyncio.sleep(1)
-
-        
         if message.content.startswith("!crime"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
