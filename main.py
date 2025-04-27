@@ -8,6 +8,7 @@ import random
 import os
 from dotenv import load_dotenv
 import time
+import string
 import asyncio
 
 
@@ -86,22 +87,42 @@ def update_bank_balance(user_id, amount):
 
 
 def format_number(number):
-    if number >= 1_000_000_000_000:
-        value = number / 1_000_000_000_000
-        suffix = "T"
-    elif number >= 1_000_000_000:
-        value = number / 1_000_000_000
-        suffix = "B"
-    elif number >= 1_000_000:
-        value = number / 1_000_000
-        suffix = "M"
-    elif number >= 1_000:
-        value = number / 1_000
-        suffix = "K"
+    if number >= 10**27:
+        value = number / 10**27
+        suffix = "O"  # Octillion
+    elif number >= 10**24:
+        value = number / 10**24
+        suffix = "N"  # Nonillion
+    elif number >= 10**21:
+        value = number / 10**21
+        suffix = "S"  # Septillion
+    elif number >= 10**18:
+        value = number / 10**18
+        suffix = "V"  # Sextillion
+    elif number >= 10**15:
+        value = number / 10**15
+        suffix = "Q"  # Quadrillion
+    elif number >= 10**12:
+        value = number / 10**12
+        suffix = "T"  # Trillion
+    elif number >= 10**9:
+        value = number / 10**9
+        suffix = "B"  # Billion
+    elif number >= 10**6:
+        value = number / 10**6
+        suffix = "M"  # Million
+    elif number >= 10**3:
+        value = number / 10**3
+        suffix = "K"  # Thousand
     else:
         return str(number)
 
     return f"{int(value) if value.is_integer() else round(value, 1)}{suffix}"
+
+
+
+
+
 
 
 def get_bank_balance(user_id):
@@ -421,7 +442,6 @@ class SelfBot(discord.Client):
                 amount_str = parts[1]
                 user_id = str(message.author.id)
 
-                
                 bank_balance = get_bank_balance(user_id)
                 wallet_balance = get_balance(user_id)
 
@@ -447,8 +467,496 @@ class SelfBot(discord.Client):
 
                 await message.reply(f"✅ Successfully withdrew {format_number(amount)} from your bank into your wallet!")
 
+        if message.content.startswith("!bank remove"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
 
 
+            if len(message.content.split()) < 2:
+                await message.reply("❌ You must mention the user to remove from your bank. Usage: `!bank remove @user`")
+                return
+
+
+            mentioned_user = message.mentions[0] if message.mentions else None
+
+            if not mentioned_user:
+                await message.reply("❌ You must mention a user to remove from your bank.")
+                return
+
+            user_id = message.author.id
+            bank_ref = db.reference("banks")
+
+            banks = bank_ref.get() or {}
+            user_bank = None
+            for bank_name, bank_data in banks.items():
+                if user_id in bank_data.get("members", []):
+                    user_bank = (bank_name, bank_data)
+                    break
+
+            if not user_bank:
+                await message.reply("❌ You are not part of any bank!")
+                return
+
+            bank_name, bank_data = user_bank
+            owner_id = bank_data.get("owner")
+            members = bank_data.get("members", [])
+
+            if message.author.id != owner_id:
+                await message.reply("❌ Only the bank owner can remove members.")
+                return
+
+            if mentioned_user.id == owner_id:
+                await message.reply("❌ You cannot remove yourself, as you are the bank owner!")
+                return
+
+            if mentioned_user.id not in members:
+                await message.reply("❌ The mentioned user is not a member of your bank.")
+                return
+            
+            members.remove(mentioned_user.id)
+            bank_ref.child(bank_name).update({
+                "members": members
+            })
+
+            victim_ref = db.reference(f"users/{mentioned_user.id}")
+            victim_ref.update({"isinclan": False})
+
+            await message.reply(f"✅ {mentioned_user.mention} has been removed from the bank.")
+
+        if message.content.startswith("!bank delete"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            if len(message.content.split()) < 2:
+                await message.reply("❌ You must specify the bank name. Usage: `!bank delete <bank_name>`")
+                return
+
+            bank_name = message.content.split("!bank delete ", 1)[1].strip()
+
+            bank_ref = db.reference(f"banks/{bank_name}")
+            bank_data = bank_ref.get()
+
+            if not bank_data:
+                await message.reply(f"❌ No bank found with the name {bank_name}.")
+                return
+
+            owner_id = bank_data.get("owner")
+            members = bank_data.get("members", [])
+
+            if message.author.id != owner_id:
+                await message.reply("❌ Only the bank owner can delete the bank.")
+                return
+
+            owner_ref = db.reference(f"users/{owner_id}")
+            owner_ref.update({"isinclan": False})
+
+            for member_id in members:
+                member_ref = db.reference(f"users/{member_id}")
+                member_ref.update({"isinclan": False})
+
+            bank_ref.delete()
+            await message.reply(f"✅ Bank **{bank_name}** has been successfully deleted. All members and the owner have been removed from the bank.")
+
+
+        if message.content.startswith("!bank create"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            if len(message.content.split()) < 2:
+                await message.reply("❌ You must provide a bank name! Usage: `!create <bank_name>`")
+                return
+
+            user_id = message.author.id
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get()
+
+            is_in_clan = user_data.get("isinclan", False)
+
+            if is_in_clan:
+                await message.reply("❌ You are already in a bank and cannot create another one.")
+                return
+
+            user_balance = user_data.get("balance", 0)
+
+            if user_balance >= 100000000000: 
+                bank_name = message.content.split("!bank create ", 1)[1].strip()
+
+                bank_ref = db.reference(f"banks/{bank_name}")
+                bank_data = bank_ref.get()
+                if bank_data:
+                    await message.reply(f"❌ A bank with the name {bank_name} already exists!")
+                    return
+
+                invite_code = ''.join(random.choices(string.ascii_letters + string.digits, k=7))
+
+                footstamp_code = str(int(time.time()))
+
+                user_ref.update({
+                    "balance": user_balance - 100000000000,
+                    "isinclan": True
+                })
+
+                
+                bank_ref.set({
+                    'owner': user_id,
+                    'members': [user_id],
+                    'name': bank_name,
+                    'invitecode': invite_code,
+                    'serverpool': "0",
+                    'created': footstamp_code
+                })
+
+                await message.reply(f"🏦 Bank **{bank_name}** created successfully!\n🔑 Invite Code: `{invite_code}`\n100B has been deducted from your balance.")
+            else:
+                await message.reply("❌ You don't have enough balance to create a bank. You need 100B.")
+
+            await asyncio.sleep(1)
+
+        if message.content.startswith("!bank deposite"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            user_id = message.author.id
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+
+            if not user_data.get("isinclan", False):
+                await message.reply("❌ You are not in a bank!")
+                return
+
+            
+            banks_ref = db.reference("banks")
+            banks = banks_ref.get() or {}
+            user_bank = None
+            for bank_name, bank_data in banks.items():
+                if user_id in bank_data.get("members", []):
+                    user_bank = (bank_name, bank_data)
+                    break
+
+            if not user_bank:
+                await message.reply("❌ Bank not found.")
+                return
+
+            bank_name, bank_data = user_bank
+            bank_ref = db.reference(f"banks/{bank_name}")
+
+            try:
+                amount_str = message.content.split("!bank deposite",1)[1].strip()
+            except IndexError:
+                await message.reply("❌ You must specify an amount to deposit! Example: `!bank deposite 1000` or `!bank deposite all`")
+                return
+
+            user_balance = user_data.get("balance", 0)
+            vault = int(bank_data.get("vault", 0))
+
+            if amount_str.lower() == "all":
+                amount = user_balance
+            else:
+                if not amount_str.isdigit():
+                    await message.reply("❌ Invalid amount.")
+                    return
+                amount = int(amount_str)
+
+            if amount <= 0:
+                await message.reply("❌ Amount must be greater than 0.")
+                return
+
+            if user_balance < amount:
+                await message.reply("❌ You don't have enough balance to deposit!")
+                return
+
+            user_ref.update({
+                "balance": user_balance - amount
+            })
+            bank_ref.update({
+                "vault": vault + amount
+            })
+
+            await message.reply(f"🏦 Successfully deposited **{amount}** coins into your bank vault!")
+            await asyncio.sleep(1)
+            
+        if message.content.startswith("!bank withdraw"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            user_id = message.author.id
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+
+            if not user_data.get("isinclan", False):
+                await message.reply("❌ You are not in a bank!")
+                return
+
+            banks_ref = db.reference("banks")
+            banks = banks_ref.get() or {}
+            user_bank = None
+            for bank_name, bank_data in banks.items():
+                if user_id in bank_data.get("members", []):
+                    user_bank = (bank_name, bank_data)
+                    break
+
+            if not user_bank:
+                await message.reply("❌ Bank not found.")
+                return
+
+            bank_name, bank_data = user_bank
+            bank_ref = db.reference(f"banks/{bank_name}")
+
+            try:
+                amount_str = message.content.split("!bank withdraw",1)[1].strip()
+            except IndexError:
+                await message.reply("❌ You must specify an amount to withdraw! Example: `!bank withdraw 1000` or `!bank withdraw all`")
+                return
+
+            user_balance = user_data.get("balance", 0)
+            vault = int(bank_data.get("vault", 0))
+
+            if amount_str.lower() == "all":
+                amount = vault
+            else:
+                if not amount_str.isdigit():
+                    await message.reply("❌ Invalid amount.")
+                    return
+                amount = int(amount_str)
+
+            if amount <= 0:
+                await message.reply("❌ Amount must be greater than 0.")
+                return
+
+            if vault < amount:
+                await message.reply("❌ There isn't enough money in the vault!")
+                return
+
+            user_ref.update({
+                "balance": user_balance + amount
+            })
+            bank_ref.update({
+                "vault": vault - amount
+            })
+
+            await message.reply(f"🏦 Successfully withdrew **{amount}** coins from your bank vault!")
+            await asyncio.sleep(1)
+
+        if message.content.startswith("!banks"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            banks_ref = db.reference("banks")
+            banks_data = banks_ref.get() or {}
+
+            bank_vaults = []
+
+            for bank_name, bank_data in banks_data.items():
+                vault = bank_data.get("vault", 0)
+                bank_vaults.append((bank_name, vault))
+
+            bank_vaults.sort(key=lambda x: x[1], reverse=True)
+
+            top_banks = bank_vaults[:5]
+
+            if not top_banks:
+                await message.reply("❌ No banks found.")
+                return
+
+
+            bank_list = "🏦 **Top 5 Banks**\n"
+            for idx, (bank_name, vault) in enumerate(top_banks, 1):
+                formatted_vault = format_number(vault)
+                bank_list += f"{idx}. **{bank_name}** ({formatted_vault})\n"
+
+            await message.reply(bank_list)
+            await asyncio.sleep(1)
+
+        if message.content.startswith("!bank info"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            user_id = message.author.id
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get()
+
+            if not user_data or not user_data.get("isinclan", False):
+                await message.reply("❌ You are not in a bank!")
+                return
+
+            banks_ref = db.reference("banks")
+            banks = banks_ref.get() or {}
+            user_bank = None
+            for bank_name, bank_data in banks.items():
+                if user_id in bank_data.get("members", []):
+                    user_bank = (bank_name, bank_data)
+                    break
+
+            if not user_bank:
+                await message.reply("❌ Bank not found.")
+                return
+
+            bank_name, bank_data = user_bank
+            owner_id = bank_data.get("owner")
+            owner_ref = db.reference(f"users/{owner_id}")
+            owner_data = owner_ref.get()
+
+            if owner_data is None:
+                await message.reply(f"❌ Unable to fetch owner data for bank **{bank_name}**. Owner's profile might not exist. Please check if the owner data exists in Firebase.")
+                return
+
+            owner_username = owner_data.get("username", "Unknown")
+
+            footstamp_code = bank_data.get("created", "Unknown")
+
+            vault = bank_data.get("vault", 0)
+            members = bank_data.get("members", [])
+            member_count = len(members)
+            invite_code = bank_data.get("invitecode", "N/A")
+
+            if user_id == owner_id:
+                user_role = "Owner"
+            else:
+                user_role = "Member"
+
+            info_message = f"🏦 **Bank Info for {bank_name}:**\n"
+            info_message += f"**Owner:** <@{owner_id}>\n"
+            info_message += f"**Role:** {user_role}\n"
+            info_message += f"**Vault Balance:** {vault} coins\n"
+            info_message += f"**Members:** {member_count} member(s)\n"
+            info_message += f"**Invite Code:** `{invite_code}`\n"
+            info_message += f"**Bank Created:** <t:{footstamp_code}:f>\n"
+            await message.reply(info_message)
+            await asyncio.sleep(1)
+
+        if message.content.startswith("!bank leave"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            user_id = message.author.id
+            bank_ref = db.reference("banks")
+            banks = bank_ref.get() or {}
+
+            user_bank = None
+            for bank_name, bank_data in banks.items():
+                if user_id in bank_data.get("members", []):
+                    user_bank = (bank_name, bank_data)
+                    break
+
+            if not user_bank:
+                await message.reply("❌ You are not part of any bank!")
+                return
+
+            bank_name, bank_data = user_bank
+            members = bank_data.get("members", [])
+
+            if user_id not in members:
+                await message.reply("❌ You are not a member of this bank!")
+                return
+
+            members.remove(user_id)
+            bank_ref.child(bank_name).update({
+                "members": members
+            })
+
+            user_ref = db.reference(f"users/{user_id}")
+            user_ref.update({"isinclan": False})
+
+            await message.reply(f"✅ You have successfully left the bank **{bank_name}**.")
+        
+        if message.content.startswith("!bank join"):
+                if message.guild is None:
+                    await message.reply("❌ This command can only be used in a server!")
+                    return
+
+                parts = message.content.strip().split()
+                if len(parts) != 2:
+                    await message.reply("❌ Usage: `!bank join <invitecode>`")
+                    return
+
+                invite_code = parts[1]
+                user_id = message.author.id
+
+                banks_ref = db.reference("banks")
+                banks = banks_ref.get() or {}
+                bank_name = None
+                for name, data in banks.items():
+                    if data.get("invitecode") == invite_code:
+                        bank_name = name
+                        break
+
+                if not bank_name:
+                    await message.reply("❌ Invalid invite code.")
+                    return
+
+                bank_ref = db.reference(f"banks/{bank_name}")
+                bank_data = bank_ref.get()
+
+                if user_id in bank_data.get("members", []):
+                    await message.reply("❌ You are already a member of this bank.")
+                    return
+
+                if user_id in bank_data.get("pending_requests", []):
+                    await message.reply("❌ You have already requested to join this bank.")
+                    return
+
+                pending = bank_data.get("pending_requests", [])
+                pending.append(user_id)
+                bank_ref.update({"pending_requests": pending})
+
+                await message.reply(f"✅ Request sent! You have requested to join the bank **{bank_name}**.")
+
+                owner_id = bank_data.get("owner")
+                owner = await client.fetch_user(owner_id)
+                if owner:
+                    try:
+                        dm = await owner.create_dm()
+                        prompt = await dm.send(
+                            f"👤 User {message.author.name}#{message.author.discriminator} wants to join your bank **{bank_name}**.\n"
+                            f"React with ✅ to approve."
+                        )
+                        await prompt.add_reaction("✅")
+
+                        def check(reaction, user):
+                            return (
+                                user.id == owner_id
+                                and str(reaction.emoji) == "✅"
+                                and reaction.message.id == prompt.id
+                            )
+
+                        try:
+                            await client.wait_for("reaction_add", timeout=3600.0, check=check)
+
+                            bank_data = bank_ref.get()
+                            pending = bank_data.get("pending_requests", [])
+                            if user_id in pending:
+                                pending.remove(user_id)
+                                members = bank_data.get("members", [])
+                                members.append(user_id)
+                                bank_ref.update({"pending_requests": pending, "members": members})
+
+                                user_ref = db.reference(f"users/{user_id}")
+                                user_ref.update({"isinclan": True})
+
+                                await dm.send(f"✅ {message.author.name} has been added to the bank.")
+                                await message.author.send(f"🎉 Your request to join **{bank_name}** has been approved!")
+                            else:
+                                await dm.send("❌ The user is no longer in the pending requests.")
+                        except asyncio.TimeoutError:
+                            await dm.send("⏰ Approval timed out.")
+                            return
+                    except Exception as e:
+                        print(f"Error sending DM to owner: {e}")
+                        await message.author.send("⚠️ Could not notify the bank owner. Please try again later.")
+                else:
+                    await message.reply("⚠️ Bank owner not found.")
+
+                await asyncio.sleep(1)
+
+        
         if message.content.startswith("!crime"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -610,8 +1118,14 @@ class SelfBot(discord.Client):
                 "17. !rob @user - Steal coins from others.\n"
                 "18. !transfer @user <amount> - Transfer coins.\n"
                 "19. !leaderboard - Check The Server Leaderboard.\n"
+                "**Bank Related Commands**\n"
+                "20. !bank create: Creates a new bank for the user.\n"
+                "21. !bank delete: Delete the bank (Owner only).\n"
+                "22. !bank remove: Removes a user from the Bank (Owner Only)\n"
+                "23. !bank join: Request and seek aprooval to join a bank.\n"
+                "25. !bank leave: Allows a user to leave the bank.\n"
+                "26. !bank info: Find information about the bank.\n"
             )
-
         if message.content.startswith("!rules"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
@@ -624,6 +1138,8 @@ class SelfBot(discord.Client):
                 "```diff\n"
                 "- No spamming commands. (Ban)\n"
                 "- Do not abuse the bot in any ways. (Temp/Perm Ban)\n"
+                "- No Abusing the Bank feature. (Temp/Perm Ban)\n"
+                "- No bad characters allowed in Bank Names.. (Temp/Perm Ban)\n"
                 "+ Enjoy ntsbot!```\n"
             )
 
@@ -1116,7 +1632,8 @@ class SelfBot(discord.Client):
                 return
 
             await message.reply("**🏆 Server Leaderboard**\n" + 
-                "\n".join(f"{i+1}. {name} - {bal} coins" for i, (name, bal) in enumerate(leaderboard)))
+                "\n".join(f"{i+1}. {name} - {format_number(bal)} coins" for i, (name, bal) in enumerate(leaderboard)))
+
 
 
 
