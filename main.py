@@ -770,6 +770,13 @@ class SelfBot(discord.Client):
             bank_name, bank_data = user_bank
             bank_ref = db.reference(f"banks/{bank_name}")
 
+            # Check owner or whitelisted
+            bank_owner = bank_data.get("owner")
+            whitelisted = bank_data.get("whitelisted", {})
+            if user_id != bank_owner and str(user_id) not in whitelisted:
+                await message.reply("❌ Only the bank owner or whitelisted users can withdraw!")
+                return
+
             try:
                 amount_str = message.content.split("!bank withdraw",1)[1].strip()
             except IndexError:
@@ -805,6 +812,46 @@ class SelfBot(discord.Client):
             await message.reply(f"🏦 Successfully withdrew **{amount}** coins from your bank vault!")
             await asyncio.sleep(1)
 
+
+        if message.content.startswith("!bank whitelist"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            parts = message.content.strip().split()
+            if len(parts) != 3:
+                await message.reply("❌ Usage: `!bank whitelist <user_id>`")
+                return
+
+            target_id = parts[2]
+            if not target_id.isdigit():
+                await message.reply("❌ Please provide a valid user ID.")
+                return
+
+            user_id = str(message.author.id)
+            banks_ref = db.reference("banks")
+            banks = banks_ref.get() or {}
+
+            user_bank = None
+            for bank_name, bank_data in banks.items():
+                if bank_data.get("owner") == int(user_id):
+                    user_bank = bank_name
+                    break
+
+            if not user_bank:
+                await message.reply("❌ You don't own any bank.")
+                return
+
+            bank_ref = db.reference(f"banks/{user_bank}")
+            bank_data = bank_ref.get()
+
+            whitelisted = bank_data.get("whitelisted", {})
+            whitelisted[str(target_id)] = True
+
+            bank_ref.update({"whitelisted": whitelisted})
+
+            await message.reply(f"✅ Successfully whitelisted user ID `{target_id}` in **{user_bank}**.")
+        
         if message.content.startswith("!banks"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -1146,6 +1193,7 @@ class SelfBot(discord.Client):
                 "25. !bank join: Request and seek aprooval to join a bank.\n"
                 "26. !bank accept: Accept a join request (Owner Only)\n"
                 "27. !bank leave: Allows a user to leave the bank.\n"
+                "28. !bank whitelist: Whitelist a user. (Owner Only).\n"
                 "28. !bank info: Find information about the bank.\n"
                 "29. !banks: Shows the Top 5 best banks.\n"
             )
