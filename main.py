@@ -678,7 +678,7 @@ class SelfBot(discord.Client):
 
             await asyncio.sleep(1)
 
-        if message.content.startswith("!bank deposite"):
+        if message.content.startswith("!bank deposit"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
                 return
@@ -708,9 +708,9 @@ class SelfBot(discord.Client):
             bank_ref = db.reference(f"banks/{bank_name}")
 
             try:
-                amount_str = message.content.split("!bank deposite",1)[1].strip()
+                amount_str = message.content.split("!bank deposit",1)[1].strip()
             except IndexError:
-                await message.reply("❌ You must specify an amount to deposit! Example: `!bank deposite 1000` or `!bank deposite all`")
+                await message.reply("❌ You must specify an amount to deposit! Example: `!bank deposit 1000` or `!bank deposit all`")
                 return
 
             user_balance = user_data.get("balance", 0)
@@ -1177,7 +1177,7 @@ class SelfBot(discord.Client):
                 "10. !blackjack <amount> - Play a game of blackjack.\n"
                 "11. !loan <amount> - Take loan from the bank.\n"
                 "12. !payloan <amount> - Pay back the loan amount.\n"
-                "13. !deposite <amount> - Deposite cash to the bank.\n"
+                "13. !deposit <amount> - Deposit cash to the bank.\n"
                 "14. !withdraw <amount> - Withdraw cash from the bank.\n"
                 "15. !dice <amount> <number> - Roll dice for prize.\n"
                 "16. !redeem <code> - Redeem a code.\n"
@@ -1188,7 +1188,7 @@ class SelfBot(discord.Client):
                 "20. !bank create: Creates a new bank for the user.\n"
                 "21. !bank delete: Delete the bank (Owner only).\n"
                 "22. !bank remove: Removes a user from the Bank (Owner Only)\n"
-                "23. !bank deposite: Deposite cash to your bank vault.\n"
+                "23. !bank deposit: Deposit cash to your bank vault.\n"
                 "24. !bank withdraw: Withdraw cash from your bank vault.\n"
                 "25. !bank join: Request and seek aprooval to join a bank.\n"
                 "26. !bank accept: Accept a join request (Owner Only)\n"
