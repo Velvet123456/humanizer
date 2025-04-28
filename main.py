@@ -314,7 +314,6 @@ class SelfBot(discord.Client):
         if not user_data or "bank" not in user_data:
             user_ref.update({"bank": 0})
 
-
         if message.content.startswith("!gamble"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -343,6 +342,7 @@ class SelfBot(discord.Client):
                 await message.channel.send(f"⏳ You can use `!gamble` again in {remaining}s.")
                 return
 
+            parts = message.content.strip().split()
             if len(parts) < 2 or (not parts[1].isdigit() and parts[1].lower() != "all"):
                 await message.reply("Use !gamble <amount/all>")
                 return
@@ -377,7 +377,7 @@ class SelfBot(discord.Client):
                     ):
                         break
                 update_balance(user_id, -bet)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{format_number(bet)}!** (Balance: {format_number(get_balance(user_id))})")
                 user_ref.update({"last_gamble": time.time()})
                 return
 
@@ -388,7 +388,7 @@ class SelfBot(discord.Client):
                     slot_result = [chosen, chosen, chosen]
                     winnings = bet * 3
                     update_balance(user_id, winnings)
-                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{winnings}** (Balance: {get_balance(user_id)})")
+                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{format_number(winnings)}** (Balance: {format_number(get_balance(user_id))})")
                 else:
                     others = [e for e in emojis if e != chosen]
                     third = random.choice(others)
@@ -397,7 +397,7 @@ class SelfBot(discord.Client):
                     slot_result[pos] = third
                     winnings = bet * 2
                     update_balance(user_id, winnings)
-                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
+                    await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{format_number(winnings)}** (Balance: {format_number(get_balance(user_id))})")
                 user_ref.update({"last_gamble": time.time()})
                 return
 
@@ -407,7 +407,7 @@ class SelfBot(discord.Client):
                 slot_result = [chosen, chosen, chosen]
                 winnings = bet * 3
                 update_balance(user_id, winnings)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{winnings}** (Balance: {get_balance(user_id)})")
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **3x +{format_number(winnings)}** (Balance: {format_number(get_balance(user_id))})")
             elif roll <= 0.40:
                 chosen = random.choice(emojis)
                 others = [e for e in emojis if e != chosen]
@@ -417,7 +417,7 @@ class SelfBot(discord.Client):
                 slot_result[pos] = third
                 winnings = bet * 2
                 update_balance(user_id, winnings)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{winnings}** (Balance: {get_balance(user_id)})")
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You won **2x +{format_number(winnings)}** (Balance: {format_number(get_balance(user_id))})")
             else:
                 while True:
                     slot_result = [random.choice(emojis) for _ in range(3)]
@@ -428,7 +428,7 @@ class SelfBot(discord.Client):
                     ):
                         break
                 update_balance(user_id, -bet)
-                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{bet}!** (Balance: {get_balance(user_id)})")
+                await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{format_number(bet)}!** (Balance: {format_number(get_balance(user_id))})")
 
             user_ref.update({"last_gamble": time.time()})
 
@@ -529,17 +529,18 @@ class SelfBot(discord.Client):
                 await message.reply("❌ This command can only be used in a server!")
                 return
 
-            if len(message.content.split()) < 2:
+            parts = message.content.split("!bank delete ", 1)
+            if len(parts) < 2 or not parts[1].strip():
                 await message.reply("❌ You must specify the bank name. Usage: `!bank delete <bank_name>`")
                 return
 
-            bank_name = message.content.split("!bank delete ", 1)[1].strip()
+            bank_name = parts[1].strip()
 
             bank_ref = db.reference(f"banks/{bank_name}")
             bank_data = bank_ref.get()
 
             if not bank_data:
-                await message.reply(f"❌ No bank found with the name {bank_name}.")
+                await message.reply(f"❌ No bank found with the name **{bank_name}**.")
                 return
 
             owner_id = bank_data.get("owner")
@@ -558,6 +559,68 @@ class SelfBot(discord.Client):
 
             bank_ref.delete()
             await message.reply(f"✅ Bank **{bank_name}** has been successfully deleted. All members and the owner have been removed from the bank.")
+
+        if message.content.startswith("!bank accept"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            parts = message.content.strip().split()
+            if len(parts) < 3:
+                await message.reply("❌ Usage: `!bank accept <user_id_or_ping>`")
+                return
+
+            user_input = parts[2]
+
+            if user_input.startswith("<@") and user_input.endswith(">"):
+                user_input = user_input.replace("<@", "").replace(">", "")
+                if user_input.startswith("!"): 
+                    user_input = user_input[1:]
+
+            try:
+                target_user_id = int(user_input)
+            except ValueError:
+                await message.reply("❌ Invalid user ID or mention!")
+                return
+
+            user_id = message.author.id
+            banks_ref = db.reference("banks")
+            banks = banks_ref.get() or {}
+
+            user_bank = None
+            for bank_name, bank_data in banks.items():
+                if bank_data.get("owner") == user_id:
+                    user_bank = (bank_name, bank_data)
+                    break
+
+            if not user_bank:
+                await message.reply("❌ You don't own any bank.")
+                return
+
+            bank_name, bank_data = user_bank
+
+            if target_user_id in bank_data.get("members", []):
+                await message.reply("❌ This user is already a member of your bank.")
+                return
+
+            if target_user_id not in bank_data.get("pending_requests", []):
+                await message.reply("❌ This user has not requested to join your bank.")
+                return
+
+
+            pending = bank_data.get("pending_requests", [])
+            pending.remove(target_user_id)
+            members = bank_data.get("members", [])
+            members.append(target_user_id)
+
+            bank_ref = db.reference(f"banks/{bank_name}")
+            bank_ref.update({"pending_requests": pending, "members": members})
+
+            user_ref = db.reference(f"users/{target_user_id}")
+            user_ref.update({"isinclan": True})
+
+            await message.reply(f"✅ User <@{target_user_id}> has been successfully added to your bank **{bank_name}**.")
+
 
 
         if message.content.startswith("!bank create"):
@@ -868,95 +931,49 @@ class SelfBot(discord.Client):
             await message.reply(f"✅ You have successfully left the bank **{bank_name}**.")
 
         if message.content.startswith("!bank join"):
-            if message.guild is None:
-                await message.reply("❌ This command can only be used in a server!")
-                return
+                if message.guild is None:
+                    await message.reply("❌ This command can only be used in a server!")
+                    return
 
-            parts = message.content.strip().split(maxsplit=2)
-            if len(parts) != 3:
-                await message.reply("❌ Usage: `!bank join <invitecode>`")
-                return
+                parts = message.content.strip().split(maxsplit=2)
+                if len(parts) != 3:
+                    await message.reply("❌ Usage: `!bank join <invitecode>`")
+                    return
 
-            invite_code = parts[2]
-            user_id = message.author.id
+                invite_code = parts[2]
+                user_id = message.author.id
 
-            banks_ref = db.reference("banks")
-            banks = banks_ref.get() or {}
-            bank_name = None
-            for name, data in banks.items():
-                if data.get("invitecode") == invite_code:
-                    bank_name = name
-                    break
+                banks_ref = db.reference("banks")
+                banks = banks_ref.get() or {}
+                bank_name = None
+                for name, data in banks.items():
+                    if data.get("invitecode") == invite_code:
+                        bank_name = name
+                        break
 
-            if not bank_name:
-                await message.reply("❌ Invalid invite code.")
-                return
+                if not bank_name:
+                    await message.reply("❌ Invalid invite code.")
+                    return
 
-            bank_ref = db.reference(f"banks/{bank_name}")
-            bank_data = bank_ref.get()
+                bank_ref = db.reference(f"banks/{bank_name}")
+                bank_data = bank_ref.get()
 
-            if user_id in bank_data.get("members", []):
-                await message.reply("❌ You are already a member of this bank.")
-                return
+                if user_id in bank_data.get("members", []):
+                    await message.reply("❌ You are already a member of this bank.")
+                    return
 
-            if user_id in bank_data.get("pending_requests", []):
-                await message.reply("❌ You have already requested to join this bank.")
-                return
+                if user_id in bank_data.get("pending_requests", []):
+                    await message.reply("❌ You have already requested to join this bank.")
+                    return
 
-            pending = bank_data.get("pending_requests", [])
-            pending.append(user_id)
-            bank_ref.update({"pending_requests": pending})
+                pending = bank_data.get("pending_requests", [])
+                pending.append(user_id)
+                bank_ref.update({"pending_requests": pending})
 
-            await message.reply(f"✅ Request sent! You have requested to join the bank **{bank_name}**.")
+                await message.reply(f"✅ Request sent! You have requested to join the bank **{bank_name}**. Please wait for the owner to accept you.")
 
-            owner_id = bank_data.get("owner")
-            try:
-                owner = await client.fetch_user(owner_id)
-                dm = await owner.create_dm()
-                prompt = await dm.send(
-                    f"👤 User {message.author.name}#{message.author.discriminator} wants to join your bank **{bank_name}**.\n"
-                    f"React with ✅ to approve."
-                )
-                await prompt.add_reaction("✅")
+                await asyncio.sleep(1)
 
-                def check(reaction, user):
-                    return (
-                        user.id == owner_id
-                        and str(reaction.emoji) == "✅"
-                        and reaction.message.id == prompt.id
-                    )
-
-                try:
-                    await client.wait_for("reaction_add", timeout=3600.0, check=check)
-
-                    bank_data = bank_ref.get()
-                    pending = bank_data.get("pending_requests", [])
-                    if user_id in pending:
-                        pending.remove(user_id)
-                        members = bank_data.get("members", [])
-                        members.append(user_id)
-                        bank_ref.update({"pending_requests": pending, "members": members})
-
-                        user_ref = db.reference(f"users/{user_id}")
-                        user_ref.update({"isinclan": True})
-
-                        await dm.send(f"✅ {message.author.name} has been added to the bank.")
-                        try:
-                            await message.author.send(f"🎉 Your request to join **{bank_name}** has been approved!")
-                        except Exception:
-                            pass
-                    else:
-                        await dm.send("❌ The user is no longer in the pending requests.")
-                except asyncio.TimeoutError:
-                    await dm.send("⏰ Approval timed out.")
-            except Exception as e:
-                print(f"Error notifying the owner: {e}")
-                try:
-                    await message.author.send("⚠️ Could not notify the bank owner. Please try again later.")
-                except Exception:
-                    pass
-
-            await asyncio.sleep(1)
 
 
         if message.content.startswith("!crime"):
@@ -1124,9 +1141,13 @@ class SelfBot(discord.Client):
                 "20. !bank create: Creates a new bank for the user.\n"
                 "21. !bank delete: Delete the bank (Owner only).\n"
                 "22. !bank remove: Removes a user from the Bank (Owner Only)\n"
-                "23. !bank join: Request and seek aprooval to join a bank.\n"
-                "25. !bank leave: Allows a user to leave the bank.\n"
-                "26. !bank info: Find information about the bank.\n"
+                "23. !bank deposite: Deposite cash to your bank vault.\n"
+                "24. !bank withdraw: Withdraw cash from your bank vault.\n"
+                "25. !bank join: Request and seek aprooval to join a bank.\n"
+                "26. !bank accept: Accept a join request (Owner Only)\n"
+                "27. !bank leave: Allows a user to leave the bank.\n"
+                "28. !bank info: Find information about the bank.\n"
+                "29. !banks: Shows the Top 5 best banks.\n"
             )
         if message.content.startswith("!rules"):
             if message.guild is None:
