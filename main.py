@@ -98,7 +98,6 @@ def update_bank_balance(user_id, amount):
 
     user_ref.set(new_balance)
 
-
 def format_number(number):
     if number >= 10**63:
         value = number / 10**63
@@ -135,35 +134,39 @@ def format_number(number):
         suffix = "Dc"  # Decillion
     elif number >= 10**30:
         value = number / 10**30
-        suffix = "N"  # Nonillion
+        suffix = "No"  # Nonillion
     elif number >= 10**27:
         value = number / 10**27
-        suffix = "O"  # Octillion
+        suffix = "Oc"  # Octillion
     elif number >= 10**24:
         value = number / 10**24
-        suffix = "S"  # Septillion
+        suffix = "Sp"  # Septillion
     elif number >= 10**21:
         value = number / 10**21
-        suffix = "V"  # Sextillion
+        suffix = "Sx"  # Sextillion
     elif number >= 10**18:
         value = number / 10**18
-        suffix = "Q"  # Quadrillion
+        suffix = "Qi"  # Quintillion
     elif number >= 10**15:
         value = number / 10**15
-        suffix = "T"  # Trillion
+        suffix = "Qa"  # Quadrillion
     elif number >= 10**12:
         value = number / 10**12
-        suffix = "B"  # Billion
+        suffix = "T"   # Trillion
     elif number >= 10**9:
         value = number / 10**9
-        suffix = "M"  # Million
+        suffix = "B"   # Billion
     elif number >= 10**6:
         value = number / 10**6
-        suffix = "K"  # Thousand
+        suffix = "M"   # Million
+    elif number >= 10**3:
+        value = number / 10**3
+        suffix = "K"   # Thousand
     else:
         return str(number)
 
     return f"{int(value) if value.is_integer() else round(value, 1)}{suffix}"
+
 
 def get_bank_balance(user_id):
     user_ref = db.reference(f"users/{user_id}")
