@@ -31,6 +31,19 @@ firebase_admin.initialize_app(cred, {
 BLACKLISTED_IDS = []
 ban_ref = db.reference("economyban")
 
+INVEST_OPTIONS = {
+    "techcorp": {"risk": 100},
+    "farmers": {"risk": 1},
+    "spaceco": {"risk": 5},
+    "banking": {"risk": 3},
+    "energy": {"risk": 4},
+    "retail": {"risk": 2},
+    "media": {"risk": 3},
+}
+
+PROFIT_PERCENTS = [30, 40, 50, 60, 70, 80, 90]
+INVEST_COOLDOWN = 10 
+
 def is_banned(user_id: int) -> bool:
     banned_users = ban_ref.get() or {}
     return str(user_id) in banned_users
@@ -87,51 +100,126 @@ def update_bank_balance(user_id, amount):
 
 
 def format_number(number):
-    if number >= 10**27:
+    if number >= 10**63:
+        value = number / 10**63
+        suffix = "Vg"  # Vigintillion
+    elif number >= 10**60:
+        value = number / 10**60
+        suffix = "Nv"  # Novemdecillion
+    elif number >= 10**57:
+        value = number / 10**57
+        suffix = "Od"  # Octodecillion
+    elif number >= 10**54:
+        value = number / 10**54
+        suffix = "Sp"  # Septendecillion
+    elif number >= 10**51:
+        value = number / 10**51
+        suffix = "Sx"  # Sexdecillion
+    elif number >= 10**48:
+        value = number / 10**48
+        suffix = "Qn"  # Quindecillion
+    elif number >= 10**45:
+        value = number / 10**45
+        suffix = "Qd"  # Quattuordecillion
+    elif number >= 10**42:
+        value = number / 10**42
+        suffix = "Td"  # Tredecillion
+    elif number >= 10**39:
+        value = number / 10**39
+        suffix = "Dd"  # Duodecillion
+    elif number >= 10**36:
+        value = number / 10**36
+        suffix = "Ud"  # Undecillion
+    elif number >= 10**33:
+        value = number / 10**33
+        suffix = "Dc"  # Decillion
+    elif number >= 10**30:
+        value = number / 10**30
+        suffix = "N"  # Nonillion
+    elif number >= 10**27:
         value = number / 10**27
         suffix = "O"  # Octillion
     elif number >= 10**24:
         value = number / 10**24
-        suffix = "N"  # Nonillion
+        suffix = "S"  # Septillion
     elif number >= 10**21:
         value = number / 10**21
-        suffix = "S"  # Septillion
+        suffix = "V"  # Sextillion
     elif number >= 10**18:
         value = number / 10**18
-        suffix = "V"  # Sextillion
+        suffix = "Q"  # Quadrillion
     elif number >= 10**15:
         value = number / 10**15
-        suffix = "Q"  # Quadrillion
+        suffix = "T"  # Trillion
     elif number >= 10**12:
         value = number / 10**12
-        suffix = "T"  # Trillion
+        suffix = "B"  # Billion
     elif number >= 10**9:
         value = number / 10**9
-        suffix = "B"  # Billion
+        suffix = "M"  # Million
     elif number >= 10**6:
         value = number / 10**6
-        suffix = "M"  # Million
-    elif number >= 10**3:
-        value = number / 10**3
         suffix = "K"  # Thousand
     else:
         return str(number)
 
     return f"{int(value) if value.is_integer() else round(value, 1)}{suffix}"
 
-
-
-
-
-
-
 def get_bank_balance(user_id):
     user_ref = db.reference(f"users/{user_id}")
     user_data = user_ref.get()
-
     if user_data and "bank" in user_data:
         return user_data["bank"]
-    return 0 
+    return 0
+
+
+def get_stakes_ref():
+    return db.reference("stakes")
+
+stock_rarity_percent = {
+    "AAPL": 81, 
+    "TSLA": 25,
+    "AMZN": 72,
+    "MSFT": 93,
+    "GOOG": 28,
+    "NFLX": 43,
+    "DIS": 30,
+    "NVDA": 100,
+    "INTC": 100,
+    "JPM": 77,
+}
+
+restock_interval = 300  # 5 minutes
+
+restock_ref = db.reference("global/stock_restock")
+stock_supply = {}
+
+def restock_stocks():
+    global stock_supply
+    now = time.time()
+    restock_data = restock_ref.get() or {}
+
+    last_restock_time = restock_data.get("last_restock_time", 0)
+
+    if now - last_restock_time < restock_interval:
+        # Interval not passed, load current supply from Firebase
+        stock_supply = restock_data.get("stock_supply", {})
+        return
+
+    # Time to restock:
+    new_supply = {}
+    for sym, chance in stock_rarity_percent.items():
+        if random.randint(1, 100) <= chance:
+            new_supply[sym] = random.randint(1, 10)
+        else:
+            new_supply[sym] = 0
+
+    restock_ref.set({
+        "last_restock_time": now,
+        "stock_supply": new_supply
+    })
+
+    stock_supply = new_supply
 
 def redeem_code(user_id, code):
     code = code.lower()
@@ -241,6 +329,17 @@ async def get_server_leaderboard(guild):
             final_result.append((member.name, balance))
 
     return final_result
+
+last_dividend_update = 0
+DIVIDEND_UPDATE_INTERVAL = 300 
+
+def update_dividends():
+    global last_dividend_update, STOCKS
+    now = time.time()
+    if now - last_dividend_update >= DIVIDEND_UPDATE_INTERVAL:
+        last_dividend_update = now
+        for sym in STOCKS:
+            STOCKS[sym]["dividend"] = round(random.uniform(1, 10), 2) 
 
 
 def get_global_leaderboard():
@@ -431,6 +530,335 @@ class SelfBot(discord.Client):
                 await message.reply(f"{slot_result[0]} {slot_result[1]} {slot_result[2]} You lost **{format_number(bet)}!** (Balance: {format_number(get_balance(user_id))})")
 
             user_ref.update({"last_gamble": time.time()})
+
+        if message.content.startswith("!stocks"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            args = message.content.split()
+            user_id = str(message.author.id)
+            user_ref = db.reference(f"users/{user_id}")
+            user_data = user_ref.get() or {}
+            stocks_owned = user_data.get("stocks", {})
+            balance = get_balance(user_id)
+
+            STOCKS = {
+                "AAPL": {"name": "Apple Inc.", "price": 15000, "dividend": 4.5},
+                "TSLA": {"name": "Tesla Inc.", "price": 88000, "dividend": 8.3},
+                "AMZN": {"name": "Amazon.com Inc.", "price": 33000, "dividend": 4.3},
+                "MSFT": {"name": "Microsoft Corp.", "price": 28000, "dividend": 3.2},
+                "GOOG": {"name": "Alphabet Inc.", "price": 97000, "dividend": 8},
+                "NFLX": {"name": "Netflix Inc.", "price": 68000, "dividend": 6.6},
+                "DIS": {"name": "Walt Disney Co.", "price": 87000, "dividend": 7.9},
+                "NVDA": {"name": "NVIDIA Corp.", "price": 10000, "dividend": 1.4},
+                "INTC": {"name": "Intel Corp.", "price": 11000, "dividend": 1.8},
+                "JPM": {"name": "JPMorgan Chase & Co.", "price": 18000, "dividend": 4.6},
+            }
+
+            if len(args) == 1:
+                await message.channel.send("Usage: `!stocks market|portfolio|buy <symbol> <amount>|sell <symbol> <amount>|dividends.`")
+                return
+
+            action = args[1].lower()
+
+            if action == "market":
+                desc = "**📈 Stock Market Prices:**\n"
+                for sym, info in STOCKS.items():
+                    desc += f"- {sym} ({info['name']}): (**Price ${info['price']}**) (**Dividend - ${info['dividend']}**)\n"
+                await message.channel.send(desc)
+
+            elif action == "portfolio":
+                if not stocks_owned:
+                    await message.reply("You don't own any stocks yet.")
+                    return
+                desc = f"**{message.author.name}'s Stock Portfolio:**\n"
+                total_val = 0
+                for sym, qty in stocks_owned.items():
+                    if sym in STOCKS:
+                        val = STOCKS[sym]["price"] * qty
+                        total_val += val
+                        desc += f"{sym}: {qty} shares, Value: ${val}\n"
+                desc += f"Total portfolio value: ${total_val}"
+                await message.channel.send(desc)
+
+            elif action == "buy":
+                if len(args) < 4:
+                    await message.reply("Usage: `!stocks buy <symbol> <amount>`")
+                    return
+                symbol = args[2].upper()
+                amount_arg = args[3]
+                if symbol not in STOCKS:
+                    await message.reply("Invalid stock symbol.")
+                    return
+                if not amount_arg.isdigit() or int(amount_arg) <= 0:
+                    await message.reply("Amount must be a positive number.")
+                    return
+                amount = int(amount_arg)
+
+                restock_ref = db.reference("global/stock_restock")
+                restock_data = restock_ref.get() or {}
+                stock_supply = restock_data.get("stock_supply", {})
+
+                available = stock_supply.get(symbol, 0)
+                if available == 0:
+                    await message.reply(f"🚫 {symbol} is currently out of supply and cannot be bought right now.")
+                    return
+                if amount > available:
+                    await message.reply(f"🚫 Only {available} shares of {symbol} are currently available to buy.")
+                    return
+
+                cost = STOCKS[symbol]["price"] * amount
+                if balance < cost:
+                    await message.reply(f"Insufficient balance. You need ${cost} but have ${balance}.")
+                    return
+
+                update_balance(user_id, -cost)
+                stocks_owned[symbol] = stocks_owned.get(symbol, 0) + amount
+                user_ref.update({"stocks": stocks_owned})
+
+                stock_supply[symbol] -= amount
+                restock_ref.update({"stock_supply": stock_supply})
+
+                await message.reply(f"Bought {amount} shares of {symbol} for ${cost}. New balance: ${get_balance(user_id)}")
+
+
+            elif action == "sell":
+                if len(args) < 4:
+                    await message.reply("Usage: `!stocks sell <symbol> <amount>`")
+                    return
+                symbol = args[2].upper()
+                amount_arg = args[3]
+                if symbol not in stocks_owned or stocks_owned[symbol] == 0:
+                    await message.reply(f"You don't own any shares of {symbol}.")
+                    return
+                if not amount_arg.isdigit() or int(amount_arg) <= 0:
+                    await message.reply("Amount must be a positive number.")
+                    return
+                amount = int(amount_arg)
+                if stocks_owned[symbol] < amount:
+                    await message.reply(f"You only have {stocks_owned[symbol]} shares of {symbol}.")
+                    return
+                sale_value = STOCKS[symbol]["price"] * amount
+                stocks_owned[symbol] -= amount
+                if stocks_owned[symbol] == 0:
+                    del stocks_owned[symbol]
+                update_balance(user_id, sale_value)
+                user_ref.update({"stocks": stocks_owned})
+                await message.reply(f"Sold {amount} shares of {symbol} for ${sale_value}. New balance: ${get_balance(user_id)}")
+
+            elif action == "dividends":
+                last_div = user_data.get("last_dividends", 0)
+                now = time.time()
+                COOLDOWN_DIVIDENDS = 1200
+                if now - last_div < COOLDOWN_DIVIDENDS:
+                    remaining = int(COOLDOWN_DIVIDENDS - (now - last_div))
+                    mins, secs = divmod(remaining, 60)
+                    await message.reply(f"⏳ You can claim dividends again in {mins} minute{'s' if mins != 1 else ''} {secs} second{'s' if secs != 1 else ''}.")
+                    return
+
+                total_div = 0
+                for sym, qty in stocks_owned.items():
+                    if sym in STOCKS:
+                        total_div += STOCKS[sym]["dividend"] * qty
+                if total_div <= 0:
+                    await message.reply("No dividends to claim right now.")
+                    return
+
+                update_balance(user_id, total_div)
+                user_ref.update({"last_dividends": now})
+                await message.reply(f"Claimed dividends: ${total_div}. New balance: ${get_balance(user_id)}")
+
+        elif message.content.startswith("!stakes"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            args = message.content.split()
+            user_id = str(message.author.id)
+            user_ref = db.reference(f"users/{user_id}")
+            balance = get_balance(user_id)
+            stakes_ref = db.reference("stakes")
+
+            if len(args) == 1:
+                await message.reply("Usage: `!stakes create <name> <amount>`, `!stakes join <name> <amount>`, `!stakes claim <name>`")
+                return
+
+            subcmd = args[1].lower()
+
+            if subcmd == "create":
+                if len(args) < 4:
+                    await message.reply("Usage: `!stakes create <name> <amount>`")
+                    return
+                name = args[2].lower()
+                amount_arg = args[3]
+                if not amount_arg.isdigit() or int(amount_arg) <= 0:
+                    await message.reply("Amount must be a positive number.")
+                    return
+                amount = int(amount_arg)
+
+                if balance < amount:
+                    await message.reply("Insufficient balance to create stake pool.")
+                    return
+
+                pool = stakes_ref.child(name).get()
+                if pool:
+                    await message.reply("Stake pool with this name already exists.")
+                    return
+
+                update_balance(user_id, -amount)
+                stakes_ref.child(name).set({
+                    "creator": int(user_id),
+                    "total": amount,
+                    "participants": {user_id: amount},
+                    "claimed": False
+                })
+                await message.reply(f"Stake pool `{name}` created with your stake of ${amount}.")
+
+            elif subcmd == "join":
+                if len(args) < 4:
+                    await message.reply("Usage: `!stakes join <name> <amount>`")
+                    return
+                name = args[2].lower()
+                amount_arg = args[3]
+                if not amount_arg.isdigit() or int(amount_arg) <= 0:
+                    await message.reply("Amount must be a positive number.")
+                    return
+                amount = int(amount_arg)
+
+                pool = stakes_ref.child(name).get()
+                if not pool:
+                    await message.reply("Stake pool not found.")
+                    return
+                if pool.get("claimed", False):
+                    await message.reply("This stake pool has already been claimed.")
+                    return
+                if balance < amount:
+                    await message.reply("Insufficient balance to join stake pool.")
+                    return
+
+                update_balance(user_id, -amount)
+                participants = pool.get("participants", {})
+                participants[user_id] = participants.get(user_id, 0) + amount
+                total = pool.get("total", 0) + amount
+                stakes_ref.child(name).update({"participants": participants, "total": total})
+                await message.reply(f"You joined stake pool `{name}` with ${amount}.")
+
+            elif subcmd == "claim":
+                if len(args) < 3:
+                    await message.reply("Usage: `!stakes claim <name>`")
+                    return
+
+                name = args[2].lower()
+                pool = stakes_ref.child(name).get()
+                if not pool:
+                    await message.reply("Stake pool not found.")
+                    return
+
+                if pool.get("claimed", False):
+                    await message.reply("This stake pool has already been claimed.")
+                    return
+
+                participants = pool.get("participants", {})
+                if not participants:
+                    await message.reply("No participants in this stake pool.")
+                    return
+
+                weighted = []
+                for uid, amt in participants.items():
+                    try:
+                        amt = int(amt)
+                    except:
+                        continue
+                    weighted.extend([uid] * amt)
+
+                if not weighted:
+                    await message.reply("Stake pool has invalid participant data.")
+                    return
+
+                winner = random.choice(weighted)
+                total_amt = pool.get("total", 0)
+
+                winner_ref = db.reference(f"users/{winner}")
+                winner_data = winner_ref.get() or {}
+                winner_balance = winner_data.get("balance", 0) + total_amt
+                winner_ref.update({"balance": winner_balance})
+                stakes_ref.child(name).update({"claimed": True})
+
+                await message.channel.send(f"🏆 <@{winner}> won the stake pool `{name}` and received ${total_amt}!")
+
+        if message.content.startswith("!supply"):
+            restock_ref = db.reference("global/stock_restock")
+            restock_data = restock_ref.get() or {}
+
+            last_restock_time = restock_data.get("last_restock_time", 0)
+            stock_supply = restock_data.get("stock_supply", {})
+
+            now = time.time()
+            if now - last_restock_time > restock_interval:
+                new_supply = {}
+                for sym, chance in stock_rarity_percent.items():
+                    if random.randint(1, 100) <= chance:
+                        new_supply[sym] = random.randint(1, 10)
+                    else:
+                        new_supply[sym] = 0
+
+                restock_ref.set({
+                    "last_restock_time": now,
+                    "stock_supply": new_supply
+                })
+
+                last_restock_time = now
+                stock_supply = new_supply
+
+            desc = "**📊 Market Supply:**\n"
+            for sym, qty in stock_supply.items():
+                desc += f"```{sym} - x{qty}```"
+
+            remaining = int(restock_interval - (now - last_restock_time))
+            if remaining < 0:
+                remaining = 0
+            mins, secs = divmod(remaining, 60)
+
+            desc += f"\n**Resupplies in {mins}m {secs}s**"
+            await message.channel.send(desc)
+
+
+        if message.content.startswith("!remove"):
+            if message.author.id != 1310617491747377199: 
+                return
+
+            print("[DEBUG] !remove command triggered")
+
+            users_ref = db.reference("users")
+            try:
+                all_users = users_ref.get() or {}
+                total_users = len(all_users)
+                print(f"[DEBUG] Total users fetched: {total_users}")
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch users: {e}")
+                await message.channel.send("❌ Failed to fetch users from Firebase.")
+                return
+
+            removed = 0
+
+            for uid, data in all_users.items():
+                try:
+                    if "balance" not in data:
+                        users_ref.child(uid).delete()
+                        removed += 1
+
+                        current_users = users_ref.get() or {}
+                        current_total = len(current_users)
+                        print(f"[DEBUG] Removing user {uid} — reason: no balance field (TOTAL USERS NOW: {current_total})")
+                    else:
+                        print(f"[DEBUG] Keeping user {uid} — balance exists.")
+                except Exception as e:
+                    print(f"[ERROR] Failed to process user {uid}: {e}")
+
+            print(f"[DEBUG] Total users removed: {removed}")
+            await message.channel.send(f"✅ Automatically removed **{removed}** users without a balance field.")
+
 
 
         if message.content.startswith("!withdraw"):
@@ -770,7 +1198,6 @@ class SelfBot(discord.Client):
             bank_name, bank_data = user_bank
             bank_ref = db.reference(f"banks/{bank_name}")
 
-            # Check owner or whitelisted
             bank_owner = bank_data.get("owner")
             whitelisted = bank_data.get("whitelisted", {})
             if user_id != bank_owner and str(user_id) not in whitelisted:
@@ -851,7 +1278,7 @@ class SelfBot(discord.Client):
             bank_ref.update({"whitelisted": whitelisted})
 
             await message.reply(f"✅ Successfully whitelisted user ID `{target_id}` in **{user_bank}**.")
-        
+
         if message.content.startswith("!banks"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -1184,19 +1611,55 @@ class SelfBot(discord.Client):
                 "17. !rob @user - Steal coins from others.\n"
                 "18. !transfer @user <amount> - Transfer coins.\n"
                 "19. !leaderboard - Check The Server Leaderboard.\n"
+                "20. !stocks market - View the current stock market prices and trends.\n"
+                "21. !stocks portfolio - View your owned stocks and portfolio value.\n"
+                "22. !stocks buy - Purchase shares of a stock available in the market.\n"
+                "23. !stocks sell - Sell your owned shares to gain balance.\n"
+                "24. !supply - Check the current available stock supply in the market.\n"
+                "25. !stakes create - Create a new stakes game to challenge others.\n"
+                "26. !stakes join - Join an existing stakes game.\n"
+                "27. !stakes claim - Claim your winnings or rewards from stakes.\n"
                 "**Bank Related Commands**\n"
-                "20. !bank create: Creates a new bank for the user.\n"
-                "21. !bank delete: Delete the bank (Owner only).\n"
-                "22. !bank remove: Removes a user from the Bank (Owner Only)\n"
-                "23. !bank deposit: Deposit cash to your bank vault.\n"
-                "24. !bank withdraw: Withdraw cash from your bank vault.\n"
-                "25. !bank join: Request and seek aprooval to join a bank.\n"
-                "26. !bank accept: Accept a join request (Owner Only)\n"
-                "27. !bank leave: Allows a user to leave the bank.\n"
-                "28. !bank whitelist: Whitelist a user. (Owner Only).\n"
-                "28. !bank info: Find information about the bank.\n"
-                "29. !banks: Shows the Top 5 best banks.\n"
+                "28. !bank create: Creates a new bank for the user.\n"
+                "29. !bank delete: Delete the bank (Owner only).\n"
+                "30. !bank remove: Removes a user from the Bank (Owner Only)\n"
+                "31. !bank deposit: Deposit cash to your bank vault.\n"
+                "32. !bank withdraw: Withdraw cash from your bank vault.\n"
+                "33. !bank join: Request and seek aprooval to join a bank.\n"
+                "34. !bank accept: Accept a join request (Owner Only)\n"
+                "35. !bank leave: Allows a user to leave the bank.\n"
+                "36. !bank whitelist: Whitelist a user. (Owner Only).\n"
+                "37. !bank info: Find information about the bank.\n"
+                "38. !banks: Shows the Top 5 best banks.\n"
             )
+        if message.content.startswith("!updates"):
+                if message.guild is None:
+                    await message.reply("❌ | This command can only be used in a server!")
+                    return
+                if is_banned(message.author.id):
+                    await message.reply("❌ | You are **banned** from using this bot.")
+                    return
+                await message.reply(
+                    "**ntsbot Updates:**\n\n"
+                    "• I’m back after 2 months.\n"
+                    "• Added 10 commands (yes):\n\n"
+                    "```1. !stocks\n"
+                    "2. !stocks market\n"
+                    "3. !stocks portfolio\n"
+                    "4. !stocks buy <symbol> <amount>\n"
+                    "5. !stocks sell <symbol> <amount>\n"
+                    "6. !stocks dividends\n"
+                    "7. !stakes create <name> <amount>\n"
+                    "8. !stakes join <name> <amount>\n"
+                    "9. !stakes claim <name>\n"
+                    "10. !supply```\n\n"
+                    "• I see I have over 13K UserIDs registered in my database. (no idea how, but okay)\n"
+                    "• I didn’t update for a long time because I ran out of ideas (happens).\n"
+                    "• Use codes **\"UPDATE\" and \"OGBOT\"**.\n"
+                    "• Since you guys were running out of numbers, I added number formatting up to Vigintillion. (try to beat that)\n"
+                    "• Updated rules. (thats all)\n"
+                )
+
         if message.content.startswith("!rules"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
@@ -1211,6 +1674,8 @@ class SelfBot(discord.Client):
                 "- Do not abuse the bot in any ways. (Temp/Perm Ban)\n"
                 "- No Abusing the Bank feature. (Temp/Perm Ban)\n"
                 "- No bad characters allowed in Bank Names.. (Temp/Perm Ban)\n"
+                "- No Abusing the Stocks feature.(Temp/Perm Ban)\n"
+                "- No Abusing the Stacks feature.(Temp/Perm Ban)\n"
                 "+ Enjoy ntsbot!```\n"
             )
 
