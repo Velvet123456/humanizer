@@ -5,3 +5,4 @@ Flask
 python-dotenv
 requests
 asyncio
+threading
