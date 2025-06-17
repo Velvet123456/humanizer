@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 import time
 import string
+import threading
 import asyncio
 
 
@@ -192,28 +193,26 @@ stock_rarity_percent = {
     "JPM": 77,
 }
 
-restock_interval = 300  # 5 minutes
+restock_interval = 300
 
 restock_ref = db.reference("global/stock_restock")
 stock_supply = {}
 
 def restock_stocks():
     global stock_supply
-    now = time.time()
-    restock_data = restock_ref.get() or {}
+    now = int(time.time())
 
+    restock_data = restock_ref.get() or {}
     last_restock_time = restock_data.get("last_restock_time", 0)
 
     if now - last_restock_time < restock_interval:
-        # Interval not passed, load current supply from Firebase
         stock_supply = restock_data.get("stock_supply", {})
         return
 
-    # Time to restock:
     new_supply = {}
     for sym, chance in stock_rarity_percent.items():
         if random.randint(1, 100) <= chance:
-            new_supply[sym] = random.randint(1, 10)
+            new_supply[sym] = random.randint(1, 45)
         else:
             new_supply[sym] = 0
 
@@ -223,6 +222,15 @@ def restock_stocks():
     })
 
     stock_supply = new_supply
+
+
+def restock_loop():
+    while True:
+        restock_stocks()
+        time.sleep(5)
+
+threading.Thread(target=restock_loop, daemon=True).start()
+
 
 def redeem_code(user_id, code):
     code = code.lower()
@@ -798,21 +806,6 @@ class SelfBot(discord.Client):
             stock_supply = restock_data.get("stock_supply", {})
 
             now = time.time()
-            if now - last_restock_time > restock_interval:
-                new_supply = {}
-                for sym, chance in stock_rarity_percent.items():
-                    if random.randint(1, 100) <= chance:
-                        new_supply[sym] = random.randint(1, 10)
-                    else:
-                        new_supply[sym] = 0
-
-                restock_ref.set({
-                    "last_restock_time": now,
-                    "stock_supply": new_supply
-                })
-
-                last_restock_time = now
-                stock_supply = new_supply
 
             desc = "**📊 Market Supply:**\n"
             for sym, qty in stock_supply.items():
