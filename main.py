@@ -212,7 +212,7 @@ def restock_stocks():
     new_supply = {}
     for sym, chance in stock_rarity_percent.items():
         if random.randint(1, 100) <= chance:
-            new_supply[sym] = random.randint(1, 120)
+            new_supply[sym] = random.randint(1, 150)
         else:
             new_supply[sym] = 0
 
@@ -1289,7 +1289,6 @@ class SelfBot(discord.Client):
             await message.reply(f"🏦 Successfully withdrew **{amount}** coins from your bank vault!")
             await asyncio.sleep(1)
 
-
         if message.content.startswith("!bank whitelist"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
@@ -1328,6 +1327,51 @@ class SelfBot(discord.Client):
             bank_ref.update({"whitelisted": whitelisted})
 
             await message.reply(f"✅ Successfully whitelisted user ID `{target_id}` in **{user_bank}**.")
+
+        if message.content.startswith("!bank remwhitelist"):
+            if message.guild is None:
+                await message.reply("❌ This command can only be used in a server!")
+                return
+
+            target_id = None
+            if message.mentions:
+                target_id = str(message.mentions[0].id)
+            else:
+                parts = message.content.strip().split()
+                if len(parts) != 3:
+                    await message.reply("❌ Usage: `!bank remwhitelist <@user|user_id>`")
+                    return
+                target_id = parts[2]
+                if not target_id.isdigit():
+                    await message.reply("❌ Please provide a valid user ID or mention.")
+                    return
+
+            user_id = str(message.author.id)
+            banks_ref = db.reference("banks")
+            banks = banks_ref.get() or {}
+
+            user_bank = None
+            for bank_name, bank_data in banks.items():
+                if bank_data.get("owner") == int(user_id):
+                    user_bank = bank_name
+                    break
+
+            if not user_bank:
+                await message.reply("❌ You don't own any bank.")
+                return
+
+            bank_ref = db.reference(f"banks/{user_bank}")
+            bank_data = bank_ref.get()
+
+            whitelisted = bank_data.get("whitelisted", {})
+            if target_id not in whitelisted:
+                await message.reply(f"❌ User ID `{target_id}` is not whitelisted in **{user_bank}**.")
+                return
+
+            whitelisted.pop(target_id)
+            bank_ref.update({"whitelisted": whitelisted})
+
+            await message.reply(f"✅ Successfully removed user ID `{target_id}` from **{user_bank}** whitelist.")
 
         if message.content.startswith("!banks"):
             if message.guild is None:
@@ -1679,8 +1723,9 @@ class SelfBot(discord.Client):
                 "34. !bank accept: Accept a join request (Owner Only)\n"
                 "35. !bank leave: Allows a user to leave the bank.\n"
                 "36. !bank whitelist: Whitelist a user. (Owner Only).\n"
-                "37. !bank info: Find information about the bank.\n"
-                "38. !banks: Shows the Top 5 best banks.\n"
+                "37. !bank remwhitelist:  Remove user from the bank's whitelist system (Owner Only).\n"
+                "38. !bank info: Find information about the bank.\n"
+                "39. !banks: Shows the Top 5 best banks.\n"
             )
 
         if message.content.startswith("!updates"):
@@ -1695,10 +1740,11 @@ class SelfBot(discord.Client):
                 "```diff\n"
                 "+ 1. Updated !transfer cmd (You can now say !transfer 1T rather than putting 1000000000000)\n"
                 "+ 2. Updated the Supply Restock Function (`!supply`)\n"
-                "+ 3. You can now use `!stocks buy all` to purchase every available stock\n"
+                "+ 3. You can now use `!buy stocks all` to purchase every available stock\n"
                 "+ 4. Use code \"EXPLOITER\" (999T)\n"
                 "- 5. Eliminated bugs\n"
                 "+ 6. Stocks now goes up to 100+\n"
+                "+ 7. !bank remwhitelist (Command Added)\n"
                 "+ 7. That's all - I forgot what else I added\n"
                 "```"
             )
