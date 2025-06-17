@@ -1695,7 +1695,7 @@ class SelfBot(discord.Client):
                 "```diff\n"
                 "+ 1. Updated !transfer cmd (You can now say !transfer 1T rather than putting 1000000000000)\n"
                 "+ 2. Updated the Supply Restock Function (`!supply`)\n"
-                "+ 3. You can now use `!buy stocks all` to purchase every available stock\n"
+                "+ 3. You can now use `!stocks buy all` to purchase every available stock\n"
                 "+ 4. Use code \"EXPLOITER\" (999T)\n"
                 "- 5. Eliminated bugs\n"
                 "+ 6. Stocks now goes up to 100+\n"
