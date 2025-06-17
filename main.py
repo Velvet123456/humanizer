@@ -212,7 +212,7 @@ def restock_stocks():
     new_supply = {}
     for sym, chance in stock_rarity_percent.items():
         if random.randint(1, 100) <= chance:
-            new_supply[sym] = random.randint(1, 45)
+            new_supply[sym] = random.randint(1, 120)
         else:
             new_supply[sym] = 0
 
@@ -299,11 +299,14 @@ def update_leaderboard():
 
 def pay_user(sender_id, receiver_id, amount):
     sender_balance = get_balance(sender_id)
-    if amount <= 0 or sender_balance < amount:
-        return "❌ Invalid amount!"
+    if amount <= 0:
+        return "❌ Amount must be positive!"
+    if sender_balance < amount:
+        return f"❌ Insufficient balance! You need {format_number(amount)} but have {format_number(sender_balance)}"
+
     update_balance(sender_id, -amount)
     update_balance(receiver_id, amount)
-    return f"✅ You sent {amount} coins to <@{receiver_id}>!"
+    return f"✅ Transferred {format_number(amount)} to <@{receiver_id}>!"
 
 async def get_server_leaderboard(guild):
     users_ref = db.reference("users")
@@ -594,10 +597,52 @@ class SelfBot(discord.Client):
                 await message.channel.send(desc)
 
             elif action == "buy":
+                if len(args) < 3:
+                    await message.reply("Usage: `!stocks buy <symbol|all> <amount>` or `!stocks buy all`")
+                    return
+
+                symbol = args[2].upper()
+
+                restock_ref = db.reference("global/stock_restock")
+                restock_data = restock_ref.get() or {}
+                stock_supply = restock_data.get("stock_supply", {})
+
+                if symbol == "ALL":
+                    total_cost = 0
+                    bought_stocks = []
+                    for sym in STOCKS:
+                        available = stock_supply.get(sym, 0)
+                        if available <= 0:
+                            continue
+                        price = STOCKS[sym]["price"]
+                        max_affordable = get_balance(user_id) // price
+                        buy_amount = min(available, max_affordable)
+                        if buy_amount <= 0:
+                            continue
+                        cost = price * buy_amount
+                        update_balance(user_id, -cost)
+                        stock_supply[sym] -= buy_amount
+                        stocks_owned[sym] = stocks_owned.get(sym, 0) + buy_amount
+                        total_cost += cost
+                        bought_stocks.append(f"{sym} x{buy_amount}")
+                    user_ref.update({"stocks": stocks_owned})
+                    restock_ref.update({"stock_supply": stock_supply})
+
+                    if bought_stocks:
+                        await message.reply(
+                            f"**✅ Bought:**\n"
+                            f"```\n" + "\n".join(bought_stocks) + "\n```"
+                            f"```\n💰 Total spent: ${total_cost}\nNew balance: ${get_balance(user_id)}\n```"
+                        )
+                    else:
+                        await message.reply("🚫 No stocks were bought. Either out of supply or not enough balance.")
+                    return
+
+                # regular single-stock buy
                 if len(args) < 4:
                     await message.reply("Usage: `!stocks buy <symbol> <amount>`")
                     return
-                symbol = args[2].upper()
+
                 amount_arg = args[3]
                 if symbol not in STOCKS:
                     await message.reply("Invalid stock symbol.")
@@ -606,10 +651,6 @@ class SelfBot(discord.Client):
                     await message.reply("Amount must be a positive number.")
                     return
                 amount = int(amount_arg)
-
-                restock_ref = db.reference("global/stock_restock")
-                restock_data = restock_ref.get() or {}
-                stock_supply = restock_data.get("stock_supply", {})
 
                 available = stock_supply.get(symbol, 0)
                 if available == 0:
@@ -633,6 +674,19 @@ class SelfBot(discord.Client):
 
                 await message.reply(f"Bought {amount} shares of {symbol} for ${cost}. New balance: ${get_balance(user_id)}")
 
+                cost = STOCKS[symbol]["price"] * amount
+                if balance < cost:
+                    await message.reply(f"Insufficient balance. You need ${cost} but have ${balance}.")
+                    return
+
+                update_balance(user_id, -cost)
+                stocks_owned[symbol] = stocks_owned.get(symbol, 0) + amount
+                user_ref.update({"stocks": stocks_owned})
+
+                stock_supply[symbol] -= amount
+                restock_ref.update({"stock_supply": stock_supply})
+
+                await message.reply(f"Bought {amount} shares of {symbol} for ${cost}. New balance: ${get_balance(user_id)}")
 
             elif action == "sell":
                 if len(args) < 4:
@@ -1628,33 +1682,26 @@ class SelfBot(discord.Client):
                 "37. !bank info: Find information about the bank.\n"
                 "38. !banks: Shows the Top 5 best banks.\n"
             )
+
         if message.content.startswith("!updates"):
-                if message.guild is None:
-                    await message.reply("❌ | This command can only be used in a server!")
-                    return
-                if is_banned(message.author.id):
-                    await message.reply("❌ | You are **banned** from using this bot.")
-                    return
-                await message.reply(
-                    "**ntsbot Updates:**\n\n"
-                    "• I’m back after 2 months.\n"
-                    "• Added 10 commands (yes):\n\n"
-                    "```1. !stocks\n"
-                    "2. !stocks market\n"
-                    "3. !stocks portfolio\n"
-                    "4. !stocks buy <symbol> <amount>\n"
-                    "5. !stocks sell <symbol> <amount>\n"
-                    "6. !stocks dividends\n"
-                    "7. !stakes create <name> <amount>\n"
-                    "8. !stakes join <name> <amount>\n"
-                    "9. !stakes claim <name>\n"
-                    "10. !supply```\n\n"
-                    "• I see I have over 13K UserIDs registered in my database. (no idea how, but okay)\n"
-                    "• I didn’t update for a long time because I ran out of ideas (happens).\n"
-                    "• Use codes **\"UPDATE\" and \"OGBOT\"**.\n"
-                    "• Since you guys were running out of numbers, I added number formatting up to Vigintillion. (try to beat that)\n"
-                    "• Updated rules. (thats all)\n"
-                )
+            if message.guild is None:
+                await message.reply("❌ | This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            await message.reply(
+                "**ntsbot Updated:** (again 💔)\n"
+                "```diff\n"
+                "+ 1. Updated !transfer cmd (You can now say !transfer 1T rather than putting 1000000000000)\n"
+                "+ 2. Updated the Supply Restock Function (`!supply`)\n"
+                "+ 3. You can now use `!buy stocks all` to purchase every available stock\n"
+                "+ 4. Use code \"EXPLOITER\" (999T)\n"
+                "- 5. Eliminated bugs\n"
+                "+ 6. Stocks now goes up to 100+\n"
+                "+ 7. That's all - I forgot what else I added\n"
+                "```"
+            )
 
         if message.content.startswith("!rules"):
             if message.guild is None:
@@ -2034,11 +2081,64 @@ class SelfBot(discord.Client):
             if is_banned(message.author.id):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
-            if len(parts) < 3 or not message.mentions or not parts[2].isdigit():
+            if len(parts) < 3 or not message.mentions:
                 await message.reply("Use !transfer @user <amount>")
                 return
-            result = pay_user(user_id, str(message.mentions[0].id), int(parts[2]))
+
+            # Process amount with case-insensitive suffix handling
+            amount_str = parts[2].upper()  # Convert to uppercase for processing
+            try:
+                # Handle all possible suffixes from format_number
+                suffix_multipliers = {
+                    'K': 10**3,
+                    'M': 10**6,
+                    'B': 10**9,
+                    'T': 10**12,
+                    'QA': 10**15,
+                    'QI': 10**18,
+                    'SX': 10**21,
+                    'SP': 10**24,
+                    'OC': 10**27,
+                    'NO': 10**30,
+                    'DC': 10**33,
+                    'UD': 10**36,
+                    'DD': 10**39,
+                    'TD': 10**42,
+                    'QD': 10**45,
+                    'QN': 10**48,
+                    'SX': 10**51,
+                    'SP': 10**54,
+                    'OD': 10**57,
+                    'NV': 10**60,
+                    'VG': 10**63
+                }
+
+                # Check if input ends with any valid suffix
+                matched = False
+                for suffix in suffix_multipliers:
+                    if amount_str.endswith(suffix):
+                        num_value = float(amount_str[:-len(suffix)])
+                        amount = int(num_value * suffix_multipliers[suffix])
+                        matched = True
+                        break
+
+                if not matched:
+                    # Check for single-letter suffixes
+                    if len(amount_str) > 1 and amount_str[-1] in ['K', 'M', 'B', 'T']:
+                        suffix = amount_str[-1]
+                        num_value = float(amount_str[:-1])
+                        amount = int(num_value * suffix_multipliers[suffix])
+                    else:
+                        amount = int(amount_str)
+            except ValueError:
+                await message.reply("Invalid amount format. Use numbers like 100, 1K, 1M, etc.")
+                return
+
+            # Process the transfer and get result message
+            result = pay_user(user_id, str(message.mentions[0].id), amount)
             xp_message = update_xp(user_id, 6)
+
+            # Send just one combined message
             await message.reply(result)
 
         if message.content.startswith(("!coinflip", "!cf")):
