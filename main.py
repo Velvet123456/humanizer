@@ -212,7 +212,7 @@ def restock_stocks():
     new_supply = {}
     for sym, chance in stock_rarity_percent.items():
         if random.randint(1, 100) <= chance:
-            new_supply[sym] = random.randint(1, 150)
+            new_supply[sym] = random.randint(1, 120)
         else:
             new_supply[sym] = 0
 
@@ -1674,10 +1674,7 @@ class SelfBot(discord.Client):
                     await message.reply(f"💥 It landed on **{roll}**! You lost **{bet}** coins. (Balance: {get_balance(user_id)})")
 
 
-
-
-
-        if message.content.startswith("!help"):
+        if message.content.startswith("!help bank"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
                 return
@@ -1685,7 +1682,31 @@ class SelfBot(discord.Client):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
             await message.reply(
-                "**ntsbot Commands:**\n"
+                "**Bank Related Commands**\n"
+                "1. !bank create: Creates a new bank for the user.\n"
+                "2. !bank delete: Delete the bank (Owner only).\n"
+                "3. !bank remove: Removes a user from the Bank (Owner Only)\n"
+                "4. !bank deposit: Deposit cash to your bank vault.\n"
+                "5. !bank withdraw: Withdraw cash from your bank vault.\n"
+                "6. !bank join: Request and seek aprooval to join a bank.\n"
+                "7. !bank accept: Accept a join request (Owner Only)\n"
+                "8. !bank leave: Allows a user to leave the bank.\n"
+                "9. !bank whitelist: Whitelist a user. (Owner Only).\n"
+                "10. !bank remwhitelist:  Remove user from the bank's whitelist system (Owner Only).\n"
+                "11. !bank info: Find information about the bank.\n"
+                "12. !banks: Shows the Top 5 best banks.\n"
+
+            )
+
+        if message.content.startswith("!help main"):
+            if message.guild is None:
+                await message.reply("❌ | This command can only be used in a server!")
+                return
+            if is_banned(message.author.id):
+                await message.reply("❌ | You are **banned** from using this bot.")
+                return
+            await message.reply(
+                "**Main Commands:**\n"
                 "1. !profile [@user] - Check profile.\n"
                 "2. !rules - View ntsbot's rules.\n"
                 "3. !work - Just Work.\n"
@@ -1713,21 +1734,9 @@ class SelfBot(discord.Client):
                 "25. !stakes create - Create a new stakes game to challenge others.\n"
                 "26. !stakes join - Join an existing stakes game.\n"
                 "27. !stakes claim - Claim your winnings or rewards from stakes.\n"
-                "**Bank Related Commands**\n"
-                "28. !bank create: Creates a new bank for the user.\n"
-                "29. !bank delete: Delete the bank (Owner only).\n"
-                "30. !bank remove: Removes a user from the Bank (Owner Only)\n"
-                "31. !bank deposit: Deposit cash to your bank vault.\n"
-                "32. !bank withdraw: Withdraw cash from your bank vault.\n"
-                "33. !bank join: Request and seek aprooval to join a bank.\n"
-                "34. !bank accept: Accept a join request (Owner Only)\n"
-                "35. !bank leave: Allows a user to leave the bank.\n"
-                "36. !bank whitelist: Whitelist a user. (Owner Only).\n"
-                "37. !bank remwhitelist:  Remove user from the bank's whitelist system (Owner Only).\n"
-                "38. !bank info: Find information about the bank.\n"
-                "39. !banks: Shows the Top 5 best banks.\n"
+                "28. !updates - Check latest ntsbot updates.\n"
             )
-
+        
         if message.content.startswith("!updates"):
             if message.guild is None:
                 await message.reply("❌ | This command can only be used in a server!")
@@ -1736,16 +1745,16 @@ class SelfBot(discord.Client):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
             await message.reply(
-                "**ntsbot Updated:** (again 💔)\n"
+                "**ntsbot Updated:** (bugs bugs bugs :bug: :bug: :bug: )\n"
                 "```diff\n"
-                "+ 1. Updated !transfer cmd (You can now say !transfer 1T rather than putting 1000000000000)\n"
-                "+ 2. Updated the Supply Restock Function (`!supply`)\n"
-                "+ 3. You can now use `!buy stocks all` to purchase every available stock\n"
-                "+ 4. Use code \"EXPLOITER\" (999T)\n"
-                "- 5. Eliminated bugs\n"
-                "+ 6. Stocks now goes up to 100+\n"
-                "+ 7. !bank remwhitelist (Command Added)\n"
-                "+ 7. That's all - I forgot what else I added\n"
+                "+ 1. updated\n"
+                "+ 2. found bugs\n"
+                "- 3. killed bugs\n"
+                "- 4. cooked bugs\n"
+                "- 5. ate bugs\n"
+                "+ 6. fixed !help command\n"
+                "+ 7. !help cmd is now seperated to 2 parts (!help main and !help bank)\n"
+                "+ 7. That's all - maybe\n"
                 "```"
             )
 
