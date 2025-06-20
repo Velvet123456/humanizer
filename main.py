@@ -212,7 +212,7 @@ def restock_stocks():
     new_supply = {}
     for sym, chance in stock_rarity_percent.items():
         if random.randint(1, 100) <= chance:
-            new_supply[sym] = random.randint(1, 120)
+            new_supply[sym] = random.randint(1, 850)
         else:
             new_supply[sym] = 0
 
@@ -558,16 +558,35 @@ class SelfBot(discord.Client):
             balance = get_balance(user_id)
 
             STOCKS = {
-                "AAPL": {"name": "Apple Inc.", "price": 15000, "dividend": 4.5},
-                "TSLA": {"name": "Tesla Inc.", "price": 88000, "dividend": 8.3},
-                "AMZN": {"name": "Amazon.com Inc.", "price": 33000, "dividend": 4.3},
-                "MSFT": {"name": "Microsoft Corp.", "price": 28000, "dividend": 3.2},
-                "GOOG": {"name": "Alphabet Inc.", "price": 97000, "dividend": 8},
-                "NFLX": {"name": "Netflix Inc.", "price": 68000, "dividend": 6.6},
-                "DIS": {"name": "Walt Disney Co.", "price": 87000, "dividend": 7.9},
-                "NVDA": {"name": "NVIDIA Corp.", "price": 10000, "dividend": 1.4},
-                "INTC": {"name": "Intel Corp.", "price": 11000, "dividend": 1.8},
-                "JPM": {"name": "JPMorgan Chase & Co.", "price": 18000, "dividend": 4.6},
+                # NVDA (Rarity: 100) - Common (lowest value)
+                "NVDA": {"name": "NVIDIA Corp.", "price": 1000000000000000000, "dividend": 1000000},
+
+                # INTC (Rarity: 100) - Common (lowest value)
+                "INTC": {"name": "Intel Corp.", "price": 1000000000000000000, "dividend": 1000000},
+
+                # MSFT (Rarity: 93) - Slightly rare
+                "MSFT": {"name": "Microsoft Corp.", "price": 3000000000000000000, "dividend": 3000000},
+
+                # AAPL (Rarity: 81) - Rare
+                "AAPL": {"name": "Apple Inc.", "price": 5000000000000000000, "dividend": 5000000},
+
+                # JPM (Rarity: 77) - Rare
+                "JPM": {"name": "JPMorgan Chase & Co.", "price": 6000000000000000000, "dividend": 6000000},
+
+                # AMZN (Rarity: 72) - Very rare
+                "AMZN": {"name": "Amazon.com Inc.", "price": 7000000000000000000, "dividend": 7000000},
+
+                # NFLX (Rarity: 43) - Extremely rare
+                "NFLX": {"name": "Netflix Inc.", "price": 8000000000000000000, "dividend": 8000000},
+
+                # DIS (Rarity: 30) - Ultra rare
+                "DIS": {"name": "Walt Disney Co.", "price": 8500000000000000000, "dividend": 8500000},
+
+                # GOOG (Rarity: 28) - Ultra rare
+                "GOOG": {"name": "Alphabet Inc.", "price": 9000000000000000000, "dividend": 9000000},
+
+                # TSLA (Rarity: 25) - Legendary (rarest)
+                "TSLA": {"name": "Tesla Inc.", "price": 10000000000000000000, "dividend": 10000000}
             }
 
             if len(args) == 1:
@@ -577,11 +596,12 @@ class SelfBot(discord.Client):
             action = args[1].lower()
 
             if action == "market":
-                desc = "**📈 Stock Market Prices:**\n"
-                for sym, info in STOCKS.items():
-                    desc += f"- {sym} ({info['name']}): (**Price ${info['price']}**) (**Dividend - ${info['dividend']}**)\n"
-                await message.channel.send(desc)
-
+                    desc = "**📈 Stock Market Prices:**\n"
+                    for sym, info in STOCKS.items():
+                        formatted_price = format_number(info['price'])
+                        formatted_dividend = format_number(info['dividend'])
+                        desc += f"- {sym} ({info['name']}): (**Price: {formatted_price}**) (**Dividend: ${formatted_dividend}**)\n"
+                    await message.channel.send(desc)
             elif action == "portfolio":
                 if not stocks_owned:
                     await message.reply("You don't own any stocks yet.")
@@ -592,8 +612,10 @@ class SelfBot(discord.Client):
                     if sym in STOCKS:
                         val = STOCKS[sym]["price"] * qty
                         total_val += val
-                        desc += f"{sym}: {qty} shares, Value: ${val}\n"
-                desc += f"Total portfolio value: ${total_val}"
+                        formatted_val = format_number(val)
+                        desc += f"```{sym}: {qty} shares, Value: ${formatted_val}\n```"
+                formatted_total = format_number(total_val)
+                desc += f" **Total portfolio value: ${formatted_total}**"
                 await message.channel.send(desc)
 
             elif action == "buy":
@@ -1745,15 +1767,15 @@ class SelfBot(discord.Client):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
             await message.reply(
-                "**ntsbot Updated:** (bugs bugs bugs :bug: :bug: :bug: )\n"
+                "**ntsbot Updated:** (i like stocks)\n"
                 "```diff\n"
                 "+ 1. updated\n"
-                "+ 2. found bugs\n"
-                "- 3. killed bugs\n"
+                "+ 2. updated stocks\n"
+                "+ 3. Stocks are now worth idk somuch\n"
                 "- 4. cooked bugs\n"
-                "- 5. ate bugs\n"
-                "+ 6. fixed !help command\n"
-                "+ 7. !help cmd is now seperated to 2 parts (!help main and !help bank)\n"
+                "+ 5. formatted the !stocks market and !stocks portfolio cuz big numbers..\n"
+                "+ 6. Updated stock dividends (!stocks dividends)\n"
+                "+ 7. Stocks now goes up to 800 in !supply\n"
                 "+ 7. That's all - maybe\n"
                 "```"
             )
