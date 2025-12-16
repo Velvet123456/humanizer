@@ -2233,7 +2233,9 @@ class SelfBot(discord.Client):
                 "25. !stakes create - Create a new stakes game to challenge others.\n"
                 "26. !stakes join - Join an existing stakes game.\n"
                 "27. !stakes claim - Claim your winnings or rewards from stakes.\n"
-                "28. !updates - Check latest ntsbot updates.\n"
+                "28. !lottery - Win money every hour.\n"
+                "29. !lottery buy - Buy lottery tickets.\n"
+                "30. !updates - Check latest ntsbot updates.\n"
             )
         
         if message.content.startswith("!updates"):
@@ -2244,16 +2246,13 @@ class SelfBot(discord.Client):
                 await message.reply("❌ | You are **banned** from using this bot.")
                 return
             await message.reply(
-                "**ntsbot Updated:** (i like stocks)\n"
+                "**ntsbot Updated:** (comeback)\n"
                 "```diff\n"
-                "+ 1. updated\n"
-                "+ 2. updated stocks\n"
-                "+ 3. Stocks are now worth idk somuch\n"
-                "- 4. cooked bugs\n"
-                "+ 5. formatted the !stocks market and !stocks portfolio cuz big numbers..\n"
-                "+ 6. Updated stock dividends (!stocks dividends)\n"
-                "+ 7. Stocks now goes up to 800 in !supply\n"
-                "+ 7. That's all - maybe\n"
+                "+ 1. Released. (again)\n"
+                "+ 2. Updated.\n"
+                "+ 3. Added 2 new commands. (!lotter and !lotter buy)\n"
+                "+ 4. Added ntsbot moderators.\n"
+                "- 5. Cooked bugs.\n"
                 "```"
             )
 
@@ -2267,7 +2266,7 @@ class SelfBot(discord.Client):
             await message.reply(
                 "**ntsbot Rules:**\n"
                 "```diff\n"
-                "- No spamming commands. (Ban)\n"
+                "- No spamming commands. (Timeout)\n"
                 "- Do not abuse the bot in any ways. (Temp/Perm Ban)\n"
                 "- No Abusing the Bank feature. (Temp/Perm Ban)\n"
                 "- No bad characters allowed in Bank Names.. (Temp/Perm Ban)\n"
