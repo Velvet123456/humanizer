@@ -6,11 +6,13 @@ import firebase_admin
 from firebase_admin import credentials, db
 import random
 import os
+import aiohttp
 from dotenv import load_dotenv
 import time
 import string
 import threading
 import asyncio
+import datetime
 
 
 app = Flask(__name__)
@@ -31,6 +33,7 @@ firebase_admin.initialize_app(cred, {
 })
 BLACKLISTED_IDS = []
 ban_ref = db.reference("economyban")
+WEBHOOK_URL = "https://discord.com/api/webhooks/1450496592791736561/ILbgPaglzQea7sSHxxZNtWnxiO28W2_bFriYIN-ju-f-Jbzcvx1ZIxTHCDktXHxR7M68"
 
 INVEST_OPTIONS = {
     "techcorp": {"risk": 100},
@@ -49,6 +52,74 @@ def is_banned(user_id: int) -> bool:
     banned_users = ban_ref.get() or {}
     return str(user_id) in banned_users
 
+AUTHORIZED_MOD_IDS = {909446748613779486,1435422908460695733 } 
+
+def parse_time_duration(duration_str: str) -> int:
+    """
+    Parses a duration string (e.g., '12m', '3d', '2w') into seconds.
+    Supports s, m, h, d, w.
+    """
+    duration_str = duration_str.lower().strip()
+    if not duration_str:
+        return 0
+
+    unit = duration_str[-1]
+
+    # Handle single-letter units and 'w'
+    if unit.isdigit():
+        # No unit found, treat as seconds by default
+        return int(duration_str)
+
+    unit_multipliers = {
+        's': 1,             # Seconds
+        'm': 60,            # Minutes
+        'h': 3600,          # Hours
+        'd': 86400,         # Days
+        'w': 604800,        # Weeks
+    }
+
+    if unit not in unit_multipliers:
+        raise ValueError("Invalid time unit. Use s, m, h, d, or w.")
+
+    try:
+        value = float(duration_str[:-1])
+    except ValueError:
+        raise ValueError("Invalid duration value.")
+
+    return int(value * unit_multipliers[unit])
+
+def set_timeout(user_id: int, duration_seconds: int):
+    """Sets a timeout end time for a user in Firebase."""
+    user_ref = db.reference(f"users/{user_id}")
+    now = int(time.time())
+
+    if duration_seconds > 0:
+        # Set the expiration timestamp
+        timeout_end = now + duration_seconds
+        user_ref.update({"timeout_end": timeout_end})
+    else:
+        # Clear the timeout (duration_seconds <= 0)
+        user_ref.update({"timeout_end": 0})
+
+def get_timeout_status(user_id: int) -> int:
+    """
+    Checks if a user is currently timed out.
+    Returns the remaining seconds (if active) or 0 (if not active).
+    """
+    timeout_end = db.reference(f"users/{user_id}/timeout_end").get() or 0
+
+    if timeout_end == 0:
+        return 0
+
+    now = int(time.time())
+    remaining = max(0, timeout_end - now)
+
+    # If the timer has expired, clear the flag in the database (optional cleanup)
+    if remaining == 0:
+        db.reference(f"users/{user_id}").update({"timeout_end": 0})
+        return 0
+
+    return remaining
 
 def get_balance(user_id):
     ref = db.reference(f"users/{user_id}/balance")
@@ -74,6 +145,27 @@ def get_last_claim(user_id):
 def set_last_claim(user_id, timestamp):
     ref = db.reference(f"users/{user_id}/last_daily")
     ref.set(timestamp)
+
+async def send_webhook_log(title: str, description: str, color: int):
+    """Sends an embedded message to the global webhook URL."""
+    # Ensure aiohttp session is used correctly if running for a long time
+    async with aiohttp.ClientSession() as session:
+        webhook = discord.Webhook.from_url(WEBHOOK_URL, session=session)
+
+        embed = discord.Embed(
+            title=title,
+            description=description,
+            color=color,
+            timestamp=datetime.datetime.now(datetime.timezone.utc)
+        )
+
+
+        try:
+            await webhook.send(embed=embed, username="ntsbot Mod Log")
+        except discord.HTTPException as e:
+            print(f"Failed to send webhook log: {e}")
+
+MAX_MOD_TIMEOUT_SECONDS = 14 * 24 * 60 * 60 
 
 def get_last_weeklyclaim(user_id):
     ref = db.reference(f"users/{user_id}/last_weekly")
@@ -176,6 +268,11 @@ def get_bank_balance(user_id):
         return user_data["bank"]
     return 0
 
+LOTTERY_DURATION = 1 * 60 * 60   
+LOTTERY_TICKET_PRICE = 10000
+LOTTERY_MAX_TICKETS = 100000000000000
+LOTTERY_MIN_POT = 100000000000
+LOTTERY_MAX_POT = 100000000000000000
 
 def get_stakes_ref():
     return db.reference("stakes")
@@ -197,6 +294,43 @@ restock_interval = 300
 
 restock_ref = db.reference("global/stock_restock")
 stock_supply = {}
+
+def get_lottery_ref():
+    return db.reference("lottery")
+
+def init_lottery():
+    ref = get_lottery_ref()
+    data = ref.get()
+    now = int(time.time())
+
+    if not data or "entries" not in data or now >= data.get("ends_at", 0):
+        ref.set({
+            "ends_at": int(time.time()) + LOTTERY_DURATION,
+            "ticket_price": LOTTERY_TICKET_PRICE,
+            "pot": random.randint(LOTTERY_MIN_POT, LOTTERY_MAX_POT),
+            "entries": {}
+        })
+
+def ensure_lottery():
+    ref = get_lottery_ref()
+    data = ref.get()
+    if not data or "entries" not in data:
+        ref.set({
+            "ends_at": int(time.time()) + LOTTERY_DURATION,
+            "ticket_price": LOTTERY_TICKET_PRICE,
+            "pot": random.randint(LOTTERY_MIN_POT, LOTTERY_MAX_POT),
+            "entries": {}
+        })
+
+def reset_lottery():
+    ref = get_lottery_ref()
+    ref.set({
+        "ends_at": int(time.time()) + LOTTERY_DURATION,
+        "ticket_price": LOTTERY_TICKET_PRICE,
+        "pot": random.randint(LOTTERY_MIN_POT, LOTTERY_MAX_POT),
+        "entries": {}
+    })
+
 
 def restock_stocks():
     global stock_supply
@@ -271,6 +405,50 @@ def rob_user(robber_id, victim_id):
     lost_amount = int(robber_balance * 0.20)
     update_balance(robber_id, -lost_amount)
     return f"❌ You failed to rob <@{victim_id}> and lost {lost_amount} coins!"
+
+def lottery_draw_loop():
+    while True:
+        time.sleep(10)
+
+        ref = get_lottery_ref()
+        data = ref.get() or {}
+
+        ends_at = data.get("ends_at")
+        if not ends_at:
+            continue
+
+        now = int(time.time())
+        if now < ends_at:
+            continue
+
+        entries = data.get("entries", {})
+
+        # No entries → just reset cleanly
+        if not entries:
+            reset_lottery()
+            continue
+
+        # Weighted draw
+        pool = []
+        for uid, tickets in entries.items():
+            pool.extend([uid] * tickets)
+
+        # Safety check (paranoia)
+        if not pool:
+            reset_lottery()
+            continue
+
+        winner = random.choice(pool)
+        pot = data.get("pot", 0)
+
+        update_balance(winner, pot)
+
+        print(f"[LOTTERY] Winner {winner} won {pot}")
+
+        # 🔥 ALWAYS FORCE RESET AFTER DRAW
+        reset_lottery()
+
+threading.Thread(target=lottery_draw_loop, daemon=True).start()
 
 
 def add_user_to_lbadd(user_id):
@@ -421,11 +599,64 @@ class SelfBot(discord.Client):
         user_id = str(message.author.id)
         parts = message.content.lower().split()
 
+        # --- DEFINITION OF USER DATA & REF ---
+        # NOTE: This section uses blocking Firebase calls and should ideally be asynchronous.
+        # However, to maintain your current structure, we define them here.
         user_ref = db.reference(f"users/{message.author.id}")
         user_data = user_ref.get()
 
+        # 🛑 GLOBAL TIMEOUT ENFORCEMENT 🛑
+        if message.content.startswith(self.command_prefix): 
+            # We skip the check if the user is the MOD, so the MOD can remove/clear timeouts.
+            if message.author.id != AUTHORIZED_MOD_IDS: 
+                # This is a blocking call and should ideally be run asynchronously, 
+                # but we keep it synchronous to match your existing pattern.
+                remaining_time = get_timeout_status(message.author.id) 
+
+                if remaining_time > 0:
+
+                    # --- START ENHANCED TIME FORMATTING ---
+
+                    # 1. Calculate the largest units first
+                    seconds = remaining_time
+                    weeks, seconds = divmod(seconds, 604800) # 604800 seconds in a week
+                    days, seconds = divmod(seconds, 86400)   # 86400 seconds in a day
+                    hours, seconds = divmod(seconds, 3600)   # 3600 seconds in an hour
+                    minutes, seconds = divmod(seconds, 60)   # 60 seconds in a minute
+
+                    # 2. Build the time string showing only non-zero units
+                    time_components = []
+                    if weeks > 0: 
+                        time_components.append(f"{weeks} week{'s' if weeks != 1 else ''}")
+                    if days > 0: 
+                        time_components.append(f"{days} day{'s' if days != 1 else ''}")
+                    if hours > 0: 
+                        time_components.append(f"{hours} hour{'s' if hours != 1 else ''}")
+                    if minutes > 0: 
+                        time_components.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+                    # Only show seconds if no larger unit was displayed OR it's the only remaining time
+                    if seconds > 0 or not time_components: 
+                        # Only show seconds if they are the only remaining unit
+                        if not time_components or seconds > 0:
+                            time_components.append(f"{seconds} second{'s' if seconds != 1 else ''}")
+
+                    # 3. Join the components for a clean output
+                    if len(time_components) > 1:
+                        # Combine all but the last item with commas, then add " and [last item]"
+                        time_str = ", ".join(time_components[:-1]) + f" and {time_components[-1]}"
+                    else:
+                        time_str = time_components[0]
+
+                    # --- END ENHANCED TIME FORMATTING ---
+
+                    await message.reply(f"🛑 You are currently timed out and cannot use commands for another **{time_str}**.")
+                    return # STOP ALL COMMAND PROCESSING
+
+        # --- INITIALIZATION/BANK CHECK ---
+        # Ensure user data is initialized, then update the local copy of user_data
         if not user_data or "bank" not in user_data:
             user_ref.update({"bank": 0})
+            user_data = user_ref.get() # Refresh local user_data after update
 
         if message.content.startswith("!gamble"):
             if message.guild is None:
@@ -695,21 +926,6 @@ class SelfBot(discord.Client):
                 restock_ref.update({"stock_supply": stock_supply})
 
                 await message.reply(f"Bought {amount} shares of {symbol} for ${cost}. New balance: ${get_balance(user_id)}")
-
-                cost = STOCKS[symbol]["price"] * amount
-                if balance < cost:
-                    await message.reply(f"Insufficient balance. You need ${cost} but have ${balance}.")
-                    return
-
-                update_balance(user_id, -cost)
-                stocks_owned[symbol] = stocks_owned.get(symbol, 0) + amount
-                user_ref.update({"stocks": stocks_owned})
-
-                stock_supply[symbol] -= amount
-                restock_ref.update({"stock_supply": stock_supply})
-
-                await message.reply(f"Bought {amount} shares of {symbol} for ${cost}. New balance: ${get_balance(user_id)}")
-
             elif action == "sell":
                 if len(args) < 4:
                     await message.reply("Usage: `!stocks sell <symbol> <amount>`")
@@ -874,6 +1090,163 @@ class SelfBot(discord.Client):
 
                 await message.channel.send(f"🏆 <@{winner}> won the stake pool `{name}` and received ${total_amt}!")
 
+        if message.content.startswith("!mod timeout"):
+
+            # 🔐 STRICT AUTHORIZATION CHECK
+            if message.author.id not in AUTHORIZED_MOD_IDS:
+                await message.reply("❌ Unauthorized. Only authorized mods can use this command.")
+                return
+
+            if len(parts) < 4:
+                await message.reply("❌ Usage: `!mod timeout <@user|user_id> <duration>` (e.g., `!mod timeout @user 12h` or `!mod timeout @user 0` to clear)")
+                return
+
+            # --- 1. Parse Target User ---
+            target_user = message.mentions[0] if message.mentions else None
+            target_id = None
+
+            if target_user:
+                target_id = target_user.id
+            else:
+                try:
+                    target_id = int(parts[2].strip().replace('<@', '').replace('!', '').replace('>', ''))
+                    target_user = await self.fetch_user(target_id)
+                except (ValueError, discord.NotFound):
+                    await message.reply("❌ Invalid user mentioned or ID provided.")
+                    return
+
+            if target_id == message.author.id:
+                await message.reply("❌ You cannot timeout yourself.")
+                return
+
+            # --- 2. Parse Duration ---
+            duration_str = parts[3]
+            try:
+                duration_seconds = parse_time_duration(duration_str)
+            except ValueError as e:
+                await message.reply(f"❌ Time parsing error: {e}")
+                return
+
+            if duration_seconds > MAX_MOD_TIMEOUT_SECONDS:
+                await message.reply(
+                    "❌ Mods cannot timeout users for more than **2 weeks**."
+                )
+                return
+            
+            # --- 3. Apply Timeout ---
+            set_timeout(target_id, duration_seconds)
+
+            # --- 4. Format Response & Webhook Variables ---
+            log_title = ""
+            log_color = 0x000000
+            duration_formatted = ""
+
+            if duration_seconds > 0:
+                log_title = "Moderation Action: User Timed Out"
+                log_color = 0xFF0000  # Red
+
+                # Enhanced Time Formatting for Output
+                seconds_val = duration_seconds
+                weeks, seconds_val = divmod(seconds_val, 604800)
+                days, seconds_val = divmod(seconds_val, 86400)
+                hours, seconds_val = divmod(seconds_val, 3600)
+                minutes, seconds_val = divmod(seconds_val, 60)
+                seconds = seconds_val
+
+                time_components = []
+                if weeks > 0: time_components.append(f"{weeks} week{'s' if weeks != 1 else ''}")
+                if days > 0: time_components.append(f"{days} day{'s' if days != 1 else ''}")
+                if hours > 0: time_components.append(f"{hours} hour{'s' if hours != 1 else ''}")
+                if minutes > 0: time_components.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+
+                if seconds > 0 or not time_components:  
+                    time_components.append(f"{seconds} second{'s' if seconds != 1 else ''}")
+
+                if len(time_components) > 1:
+                    duration_formatted = ", ".join(time_components[:-1]) + f" and {time_components[-1]}"
+                else:
+                    duration_formatted = time_components[0]
+
+                await message.reply(f"✅ User **{target_user.name}** has been timed out for **{duration_formatted}**.")
+
+            else:
+                # Clear/Remove Timeout
+                log_title = "Moderation Action: Timeout Removed"
+                log_color = 0x00FF00  # Green
+                duration_formatted = "CLEARED" # For the webhook log
+                await message.reply(f"✅ Timeout removed for user **{target_user.name}**.")
+
+            # --- 5. Webhook Logging ---
+            log_description = (
+                f"**User:** <@{target_id}> (`{target_user.name}`)\n"
+                f"**UserID:** `{target_id}`\n"
+                f"**Action:** {'Timeout set' if duration_seconds > 0 else 'Timeout removed'}\n"
+                f"**Duration:** {duration_formatted}\n"
+                f"**Moderator:** <@{message.author.id}> (`{message.author.name}`)"
+            )
+
+            await send_webhook_log(
+                title=log_title,
+                description=log_description,
+                color=log_color
+            )
+            return
+
+        if message.content.startswith("!mod untimeout"):
+
+            # 🔐 STRICT AUTHORIZATION CHECK
+            if message.author.id not in AUTHORIZED_MOD_IDS:
+                await message.reply("❌ Unauthorized. Only authorized mods can use this command.")
+                return
+
+            if len(parts) < 3:
+                await message.reply("❌ Usage: `!mod untimeout <@user|user_id>`")
+                return
+
+            # --- 1. Parse Target User ---
+            target_user = message.mentions[0] if message.mentions else None
+            target_id = None
+
+            if target_user:
+                target_id = target_user.id
+            else:
+                try:
+                    target_id = int(parts[2].strip().replace('<@', '').replace('!', '').replace('>', ''))
+                    target_user = await self.fetch_user(target_id)
+                except (ValueError, discord.NotFound):
+                    await message.reply("❌ Invalid user mentioned or ID provided.")
+                    return
+
+            if target_id == message.author.id:
+                await message.reply("❌ You cannot untimeout yourself.")
+                return
+
+            # --- 2. Clear Timeout ---
+            set_timeout(target_id, 0)
+
+            # --- 3. User Response ---
+            await message.reply(f"✅ Timeout removed for user **{target_user.name}**.")
+
+            # --- 4. Webhook Logging ---
+            log_title = "Moderation Action: Timeout Removed"
+            log_color = 0x00FF00  # Green
+
+            log_description = (
+                f"**User:** <@{target_id}> (`{target_user.name}`)\n"
+                f"**UserID:** `{target_id}`\n"
+                f"**Action:** Timeout removed\n"
+                f"**Moderator:** <@{message.author.id}> (`{message.author.name}`)"
+            )
+
+            await send_webhook_log(
+                title=log_title,
+                description=log_description,
+                color=log_color
+            )
+            return
+
+
+        # ---- next command ----
         if message.content.startswith("!supply"):
             restock_ref = db.reference("global/stock_restock")
             restock_data = restock_ref.get() or {}
@@ -897,7 +1270,7 @@ class SelfBot(discord.Client):
 
 
         if message.content.startswith("!remove"):
-            if message.author.id != 1310617491747377199: 
+            if message.author.id != 1354087903126487120: 
                 return
 
             print("[DEBUG] !remove command triggered")
@@ -930,9 +1303,7 @@ class SelfBot(discord.Client):
 
             print(f"[DEBUG] Total users removed: {removed}")
             await message.channel.send(f"✅ Automatically removed **{removed}** users without a balance field.")
-
-
-
+        
         if message.content.startswith("!withdraw"):
                 parts = message.content.split()
                 if len(parts) < 2:
@@ -1024,6 +1395,112 @@ class SelfBot(discord.Client):
 
             await message.reply(f"✅ {mentioned_user.mention} has been removed from the bank.")
 
+        if message.content.startswith("!lottery"):
+            ensure_lottery()
+            ref = get_lottery_ref()
+            data = ref.get() or {}
+
+            args = message.content.split()
+            user_id = str(message.author.id)
+
+            LOTTERY_FORCE_END_ID = 1354087903126487120
+
+            # ---------- FORCE END LOTTERY (OWNER ONLY) ----------
+            if len(args) == 2 and args[1] == "end":
+                    if message.author.id != LOTTERY_FORCE_END_ID:
+                        await message.reply("❌ You are not allowed to end the lottery.")
+                        return
+
+                    entries = data.get("entries", {})
+                    if not entries:
+                        await message.reply("❌ No entries. Cannot end lottery.")
+                        return
+
+                    pool = []
+                    for uid, tickets in entries.items():
+                        pool.extend([uid] * tickets)
+
+                    winner = random.choice(pool)
+                    pot = data.get("pot", 0)
+
+                    update_balance(winner, pot)
+
+                    await message.channel.send(
+                        f"🎉 **LOTTERY ENDED MANUALLY** 🎉\n"
+                        f"Winner: <@{winner}>\n"
+                        f"Prize: {format_number(pot)}"
+                    )
+
+                    # 🔥 FORCE RESET (THIS IS THE KEY)
+                    ref.set({
+                        "ends_at": int(time.time()) + LOTTERY_DURATION,
+                        "ticket_price": LOTTERY_TICKET_PRICE,
+                        "pot": random.randint(LOTTERY_MIN_POT, LOTTERY_MAX_POT),
+                        "entries": {}
+                    })
+
+                    return
+
+
+            # ---------- SHOW LOTTERY ----------
+            if len(args) == 1:
+                remaining = max(0, data.get("ends_at", 0) - int(time.time()))
+                mins, secs = divmod(remaining, 60)
+                entries = data.get("entries", {})
+                total_tickets = sum(entries.values())
+
+                await message.reply(
+                    f"🎟️ **Lottery**\n"
+                    f"Ticket Price: {format_number(data.get('ticket_price', 0))}\n"
+                    f"Prize Pool: {format_number(data.get('pot', 0))}\n"
+                    f"Total Tickets: {total_tickets}\n"
+                    f"Draws in: {mins}m {secs}s\n"
+                    f"Use `!lottery buy [amount]`"
+                )
+                return
+
+            # ---------- BUY TICKETS ----------
+            if args[1] == "buy":
+                amount = 1
+                if len(args) == 3 and args[2].isdigit():
+                    amount = int(args[2])
+
+                if amount <= 0:
+                    await message.reply("❌ Invalid ticket amount.")
+                    return
+
+                entries = data.get("entries", {})
+                owned = entries.get(user_id, 0)
+
+                if owned + amount > LOTTERY_MAX_TICKETS:
+                    await message.reply(f"❌ Max {LOTTERY_MAX_TICKETS} tickets per user.")
+                    return
+
+                cost = data["ticket_price"] * amount
+                balance = get_balance(user_id)
+
+                if balance < cost:
+                    await message.reply("❌ Not enough balance.")
+                    return
+
+                update_balance(user_id, -cost)
+
+                entries[user_id] = owned + amount
+                new_pot = data.get("pot", 0) + cost
+
+                ref.update({
+                    "entries": entries,
+                    "pot": new_pot
+                })
+
+                await message.reply(
+                    f"✅ Bought **{amount}** ticket(s).\n"
+                    f"🎟️ Your tickets: {entries[user_id]}\n"
+                    f"💰 Prize Pool: {format_number(new_pot)}"
+                )
+                return
+
+        
         if message.content.startswith("!bank delete"):
             if message.guild is None:
                 await message.reply("❌ This command can only be used in a server!")
